@@ -9,6 +9,7 @@ from models import app
 import time
 from sqlalchemy import or_,and_
 import pandas
+import numpy as np
 import datetime
 from flask_security import Security, SQLAlchemySessionUserDatastore, \
     UserMixin, RoleMixin, login_required, auth_token_required, http_auth_required,current_user
@@ -255,143 +256,214 @@ def predict():
             
             print(f"接收到的特征值: region={region}, department={department}, position={position}, education={education}, major={major}, recruitment_num={recruitment_num}, application_num={application_num}, year={year}")
 
-            # 高级特征工程
-            # 1. 将字符串类型特征转换为数值类型（使用更好的编码方式）
-            from sklearn.preprocessing import LabelEncoder
+            # 更高级的特征工程和模型训练
+            from sklearn.preprocessing import LabelEncoder, StandardScaler, PolynomialFeatures
+            from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, StackingRegressor
+            from sklearn.model_selection import train_test_split, cross_val_score, KFold
+            from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
+            from sklearn.linear_model import ElasticNet, Ridge, Lasso, HuberRegressor
+            from sklearn.svm import SVR
+            from sklearn.neighbors import KNeighborsRegressor
+            
+            # 尝试导入高级模型库，如果不存在则安装
+            try:
+                import xgboost as xgb
+                from xgboost import XGBRegressor
+            except ImportError:
+                import subprocess
+                subprocess.call(['pip', 'install', 'xgboost'])
+                import xgboost as xgb
+                from xgboost import XGBRegressor
+            
+            try:
+                import lightgbm as lgb
+                from lightgbm import LGBMRegressor
+            except ImportError:
+                import subprocess
+                subprocess.call(['pip', 'install', 'lightgbm'])
+                import lightgbm as lgb
+                from lightgbm import LGBMRegressor
+            
+            try:
+                import catboost as cb
+                from catboost import CatBoostRegressor
+            except ImportError:
+                import subprocess
+                subprocess.call(['pip', 'install', 'catboost'])
+                import catboost as cb
+                from catboost import CatBoostRegressor
             
             # 创建标签编码器
             encoders = {}
             cat_features = ['地区', '部门名称', '职位', '学历', '专业']
-            if '年份' in df.columns:
+            if '年份' in df.columns and year:
                 cat_features.append('年份')
             
             for feature in cat_features:
                 encoders[feature] = LabelEncoder()
                 df[feature] = encoders[feature].fit_transform(df[feature])
             
-            # 2. 创建新的特征
-            # 竞争比例：报考人数/招考人数
+            # 创建高级特征
+            # 1. 基础竞争比例
             df['竞争比例'] = df['报考人数'] / df['招考人数']
+            df['竞争比例_对数'] = np.log1p(df['竞争比例'])  # 添加对数变换特征
             
-            # 3. 可能的年份相关特征
-            if '年份' in df.columns:
-                # 确保年份是数值类型
-                if df['年份'].dtype == 'object':
-                    df['年份'] = df['年份'].astype(int)
-                
-                # 计算当年平均分数线和最高分
-                year_avg_scores = df.groupby('年份')['分数线'].mean().to_dict()
-                df['年度平均分'] = df['年份'].map(year_avg_scores)
-                
-                # 计算地区年度平均分
-                region_year_avg = df.groupby(['地区', '年份'])['分数线'].mean().reset_index()
-                region_year_dict = dict(zip(zip(region_year_avg['地区'], region_year_avg['年份']), region_year_avg['分数线']))
-                df['地区年度平均分'] = [region_year_dict.get((r, y), 0) for r, y in zip(df['地区'], df['年份'])]
-                
-                # 专业年度平均分
-                major_year_avg = df.groupby(['专业', '年份'])['分数线'].mean().reset_index()
-                major_year_dict = dict(zip(zip(major_year_avg['专业'], major_year_avg['年份']), major_year_avg['分数线']))
-                df['专业年度平均分'] = [major_year_dict.get((m, y), 0) for m, y in zip(df['专业'], df['年份'])]
-            
-            # 4. 地区、专业、学历的平均分数线
-            region_avg = df.groupby('地区')['分数线'].mean().to_dict()
-            df['地区平均分'] = df['地区'].map(region_avg)
-            
+            # 2. 专业相关特征
             major_avg = df.groupby('专业')['分数线'].mean().to_dict()
-            df['专业平均分'] = df['专业'].map(major_avg)
+            major_max = df.groupby('专业')['分数线'].max().to_dict()
+            major_min = df.groupby('专业')['分数线'].min().to_dict()
+            major_std = df.groupby('专业')['分数线'].std().fillna(0).to_dict()
+            major_median = df.groupby('专业')['分数线'].median().to_dict()  # 添加中位数特征
             
+            df['专业_平均分'] = df['专业'].map(major_avg)
+            df['专业_最高分'] = df['专业'].map(major_max)
+            df['专业_最低分'] = df['专业'].map(major_min)
+            df['专业_分差'] = df['专业_最高分'] - df['专业_最低分']
+            df['专业_标准差'] = df['专业'].map(major_std)
+            df['专业_中位数'] = df['专业'].map(major_median)
+            df['专业_变异系数'] = df['专业_标准差'] / df['专业_平均分']  # 添加变异系数特征
+            
+            # 3. 地区相关特征
+            region_avg = df.groupby('地区')['分数线'].mean().to_dict()
+            region_max = df.groupby('地区')['分数线'].max().to_dict()
+            region_competition = df.groupby('地区')['竞争比例'].mean().to_dict()
+            region_median = df.groupby('地区')['分数线'].median().to_dict()  # 添加中位数特征
+            
+            df['地区_平均分'] = df['地区'].map(region_avg)
+            df['地区_最高分'] = df['地区'].map(region_max)
+            df['地区_平均竞争比'] = df['地区'].map(region_competition)
+            df['地区_中位数'] = df['地区'].map(region_median)
+            
+            # 4. 教育程度特征
             edu_avg = df.groupby('学历')['分数线'].mean().to_dict()
-            df['学历平均分'] = df['学历'].map(edu_avg)
+            edu_max = df.groupby('学历')['分数线'].max().to_dict()  # 添加最高分
+            edu_min = df.groupby('学历')['分数线'].min().to_dict()  # 添加最低分
             
-            # 5. 选择特征
-            features = ['地区', '部门名称', '职位', '学历', '专业', '招考人数', '报考人数', '竞争比例', 
-                      '地区平均分', '专业平均分', '学历平均分']
+            df['学历_平均分'] = df['学历'].map(edu_avg)
+            df['学历_最高分'] = df['学历'].map(edu_max)
+            df['学历_最低分'] = df['学历'].map(edu_min)
             
-            if '年份' in df.columns:
-                features.extend(['年份', '年度平均分', '地区年度平均分', '专业年度平均分'])
+            # 5. 职位复合特征
+            job_major_avg = df.groupby(['职位', '专业'])['分数线'].mean().to_dict()
+            job_region_avg = df.groupby(['职位', '地区'])['分数线'].mean().to_dict()  # 添加职位-地区交叉特征
             
-            # 特征和标签
+            df['职位专业_平均分'] = [job_major_avg.get((p, m), 0) for p, m in zip(df['职位'], df['专业'])]
+            df['职位地区_平均分'] = [job_region_avg.get((p, r), 0) for p, r in zip(df['职位'], df['地区'])]
+            
+            # 6. 部门相关特征
+            dept_avg = df.groupby('部门名称')['分数线'].mean().to_dict()
+            dept_competition = df.groupby('部门名称')['竞争比例'].mean().to_dict()
+            
+            df['部门_平均分'] = df['部门名称'].map(dept_avg)
+            df['部门_平均竞争比'] = df['部门名称'].map(dept_competition)
+            
+            # 7. 添加二次项特征
+            df['招考人数_平方'] = df['招考人数'] ** 2
+            df['报考人数_平方'] = df['报考人数'] ** 2
+            
+            # 8. 添加交互特征
+            df['招报_乘积'] = df['招考人数'] * df['报考人数']
+            
+            # 选择最终特征集
+            features = [
+                '地区', '部门名称', '职位', '学历', '专业', '招考人数', '报考人数', '竞争比例',
+                '竞争比例_对数', '专业_平均分', '专业_最高分', '专业_最低分', '专业_分差', 
+                '专业_标准差', '专业_中位数', '专业_变异系数', '地区_平均分', '地区_最高分',
+                '地区_平均竞争比', '地区_中位数', '学历_平均分', '学历_最高分', '学历_最低分',
+                '职位专业_平均分', '职位地区_平均分', '部门_平均分', '部门_平均竞争比',
+                '招考人数_平方', '报考人数_平方', '招报_乘积'
+            ]
+            
+            if '年份' in df.columns and year:
+                features.append('年份')
+            
+            # 准备训练数据
             X = df[features]
             y = df['分数线']
             
-            # 使用Grid Search进行超参数调优
-            from sklearn.model_selection import GridSearchCV, KFold
-            from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-            from sklearn.metrics import mean_squared_error, r2_score
+            # 使用多项式特征扩展
+            poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+            X_poly = poly.fit_transform(X[['招考人数', '报考人数', '竞争比例']])
             
-            # 准备模型
-            ml_models = {
-                'RandomForest': {
-                    'model': RandomForestRegressor(random_state=42),
-                    'params': {
-                        'n_estimators': [100, 200],
-                        'max_depth': [None, 10, 20],
-                        'min_samples_split': [2, 5],
-                        'min_samples_leaf': [1, 2]
-                    }
-                },
-                'GradientBoosting': {
-                    'model': GradientBoostingRegressor(random_state=42),
-                    'params': {
-                        'n_estimators': [100, 200],
-                        'learning_rate': [0.01, 0.1],
-                        'max_depth': [3, 5],
-                        'min_samples_split': [2, 5]
-                    }
-                }
-            }
+            # 将多项式特征添加到原始特征中
+            poly_feature_names = [f'poly_{i}' for i in range(X_poly.shape[1])]
+            X_poly_df = pd.DataFrame(X_poly, columns=poly_feature_names, index=X.index)
+            X = pd.concat([X, X_poly_df], axis=1)
+            features.extend(poly_feature_names)
             
-            # 使用交叉验证
-            kf = KFold(n_splits=5, shuffle=True, random_state=42)
+            # 标准化数值特征(非分类特征)
+            cat_indices = [X.columns.get_loc(col) for col in ['地区', '部门名称', '职位', '学历', '专业'] if col in X.columns]
+            numeric_features = [col for col in X.columns if X.columns.get_loc(col) not in cat_indices]
             
-            best_score = -float('inf')
-            best_model = None
-            best_model_name = None
+            scaler = StandardScaler()
+            X[numeric_features] = scaler.fit_transform(X[numeric_features])
             
-            for model_name, model_info in ml_models.items():
-                # 使用Grid Search进行超参数调优
-                grid_search = GridSearchCV(
-                    model_info['model'],
-                    model_info['params'],
-                    cv=kf,
-                    scoring='r2',
-                    n_jobs=-1
-                )
-                grid_search.fit(X, y)
-                
-                if grid_search.best_score_ > best_score:
-                    best_score = grid_search.best_score_
-                    best_model = grid_search.best_estimator_
-                    best_model_name = model_name
-                    
-            # 最终模型训练
+            # 训练集测试集分割
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-            best_model.fit(X_train, y_train)
+            
+            # 构建更强大的基础模型
+            rf = RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_split=5, 
+                                     random_state=42, n_jobs=-1)
+            
+            gbm = GradientBoostingRegressor(n_estimators=200, learning_rate=0.05, 
+                                          max_depth=5, subsample=0.8, random_state=42)
+            
+            xgb_model = XGBRegressor(n_estimators=200, learning_rate=0.05, max_depth=6, 
+                                   gamma=0, subsample=0.8, colsample_bytree=0.8, 
+                                   reg_alpha=0.1, reg_lambda=1, random_state=42, n_jobs=-1)
+            
+            lgb_model = LGBMRegressor(n_estimators=200, learning_rate=0.05, max_depth=6, 
+                                    num_leaves=31, subsample=0.8, colsample_bytree=0.8, 
+                                    reg_alpha=0.1, reg_lambda=1, random_state=42, n_jobs=-1)
+            
+            catboost_model = CatBoostRegressor(iterations=200, learning_rate=0.05, depth=6, 
+                                            l2_leaf_reg=3, random_state=42, verbose=0,
+                                            cat_features=cat_indices)
+            
+            # 创建第二层元模型
+            meta_model = Ridge(alpha=1.0)
+            
+            # 创建Stacking回归器(高级集成模型)
+            estimators = [
+                ('rf', rf),
+                ('gb', gbm),
+                ('xgb', xgb_model),
+                ('lgb', lgb_model),
+                ('catboost', catboost_model)
+            ]
+            
+            stack = StackingRegressor(
+                estimators=estimators,
+                final_estimator=meta_model,
+                cv=5,
+                n_jobs=-1
+            )
+            
+            # 使用交叉验证评估模型
+            kf = KFold(n_splits=5, shuffle=True, random_state=42)
+            cv_scores = cross_val_score(stack, X, y, cv=kf, scoring='r2')
+            print(f"交叉验证 R² 分数: {cv_scores.mean():.4f}")
+            
+            # 训练最终模型
+            stack.fit(X_train, y_train)
             
             # 模型评估
-            train_score = best_model.score(X_train, y_train)
-            test_score = best_model.score(X_test, y_test)
-            train_mse = mean_squared_error(y_train, best_model.predict(X_train))
-            test_mse = mean_squared_error(y_test, best_model.predict(X_test))
-            train_rmse = np.sqrt(train_mse)
-            test_rmse = np.sqrt(test_mse)
+            train_preds = stack.predict(X_train)
+            test_preds = stack.predict(X_test)
             
-            print(f"最佳模型: {best_model_name}")
-            print(f"最佳参数: {best_model.get_params()}")
-            print(f"训练集 R² 分数: {train_score:.4f}")
-            print(f"测试集 R² 分数: {test_score:.4f}")
-            print(f"训练集 MSE: {train_mse:.4f}")
-            print(f"测试集 MSE: {test_mse:.4f}")
+            train_r2 = r2_score(y_train, train_preds)
+            test_r2 = r2_score(y_test, test_preds)
+            train_mae = mean_absolute_error(y_train, train_preds)
+            test_mae = mean_absolute_error(y_test, test_preds)
+            train_rmse = np.sqrt(mean_squared_error(y_train, train_preds))
+            test_rmse = np.sqrt(mean_squared_error(y_test, test_preds))
+            
+            print(f"训练集 R² 分数: {train_r2:.4f}")
+            print(f"测试集 R² 分数: {test_r2:.4f}")
+            print(f"训练集 MAE: {train_mae:.4f}")
             print(f"训练集 RMSE: {train_rmse:.4f}")
+            print(f"测试集 MAE: {test_mae:.4f}")
             print(f"测试集 RMSE: {test_rmse:.4f}")
-            
-            # 特征重要性分析
-            if hasattr(best_model, 'feature_importances_'):
-                importances = best_model.feature_importances_
-                feature_importance = pd.DataFrame({'feature': features, 'importance': importances})
-                feature_importance = feature_importance.sort_values('importance', ascending=False)
-                print("特征重要性排序:")
-                print(feature_importance)
             
             # 准备预测数据
             input_data = pd.DataFrame({
@@ -403,46 +475,83 @@ def predict():
                 '招考人数': [recruitment_num],
                 '报考人数': [application_num],
                 '竞争比例': [application_num / recruitment_num],
-                '地区平均分': [region_avg[encoders['地区'].transform([region])[0]]],
-                '专业平均分': [major_avg[encoders['专业'].transform([major])[0]]],
-                '学历平均分': [edu_avg[encoders['学历'].transform([education])[0]]]
+                '竞争比例_对数': [np.log1p(application_num / recruitment_num)]
             })
             
-            # 添加年份相关特征
+            # 添加高级特征到预测数据
+            input_data['专业_平均分'] = major_avg.get(encoders['专业'].transform([major])[0], 0)
+            input_data['专业_最高分'] = major_max.get(encoders['专业'].transform([major])[0], 0)
+            input_data['专业_最低分'] = major_min.get(encoders['专业'].transform([major])[0], 0)
+            input_data['专业_分差'] = input_data['专业_最高分'] - input_data['专业_最低分']
+            input_data['专业_标准差'] = major_std.get(encoders['专业'].transform([major])[0], 0)
+            input_data['专业_中位数'] = major_median.get(encoders['专业'].transform([major])[0], 0)
+            input_data['专业_变异系数'] = input_data['专业_标准差'] / input_data['专业_平均分']
+            
+            input_data['地区_平均分'] = region_avg.get(encoders['地区'].transform([region])[0], 0)
+            input_data['地区_最高分'] = region_max.get(encoders['地区'].transform([region])[0], 0)
+            input_data['地区_平均竞争比'] = region_competition.get(encoders['地区'].transform([region])[0], 0)
+            input_data['地区_中位数'] = region_median.get(encoders['地区'].transform([region])[0], 0)
+            
+            input_data['学历_平均分'] = edu_avg.get(encoders['学历'].transform([education])[0], 0)
+            input_data['学历_最高分'] = edu_max.get(encoders['学历'].transform([education])[0], 0)
+            input_data['学历_最低分'] = edu_min.get(encoders['学历'].transform([education])[0], 0)
+            
+            job_major_key = (encoders['职位'].transform([position])[0], encoders['专业'].transform([major])[0])
+            input_data['职位专业_平均分'] = job_major_avg.get(job_major_key, 0)
+            
+            job_region_key = (encoders['职位'].transform([position])[0], encoders['地区'].transform([region])[0])
+            input_data['职位地区_平均分'] = job_region_avg.get(job_region_key, 0)
+            
+            input_data['部门_平均分'] = dept_avg.get(encoders['部门名称'].transform([department])[0], 0)
+            input_data['部门_平均竞争比'] = dept_competition.get(encoders['部门名称'].transform([department])[0], 0)
+            
+            input_data['招考人数_平方'] = input_data['招考人数'] ** 2
+            input_data['报考人数_平方'] = input_data['报考人数'] ** 2
+            input_data['招报_乘积'] = input_data['招考人数'] * input_data['报考人数']
+            
+            # 添加年份特征(如果存在)
             if '年份' in df.columns and year:
-                encoded_year = encoders['年份'].transform([year])[0]
-                input_data['年份'] = encoded_year
-                input_data['年度平均分'] = year_avg_scores.get(encoded_year, 0)
-                input_data['地区年度平均分'] = region_year_dict.get((encoders['地区'].transform([region])[0], encoded_year), 0)
-                input_data['专业年度平均分'] = major_year_dict.get((encoders['专业'].transform([major])[0], encoded_year), 0)
+                input_data['年份'] = encoders['年份'].transform([year])[0]
+            
+            # 添加多项式特征
+            input_poly = poly.transform(input_data[['招考人数', '报考人数', '竞争比例']])
+            for i, col in enumerate(poly_feature_names):
+                input_data[col] = input_poly[0, i]
+            
+            # 标准化预测数据的数值特征
+            input_data[numeric_features] = scaler.transform(input_data[numeric_features])
             
             # 确保输入数据具有所有所需特征
             for feature in features:
                 if feature not in input_data.columns:
                     input_data[feature] = 0
             
-            # 调整列顺序以匹配训练数据
+            # 重新排列特征列以匹配训练数据
             input_data = input_data[features]
             
-            # 预测
-            raw_prediction = best_model.predict(input_data)[0]
-            
-            # 减少随机性，但保留少量调整以考虑模型不确定性
-            predicted_score = round(raw_prediction, 2) + random.uniform(-1, 1)
+            # 使用堆叠集成模型进行预测
+            predicted_score = stack.predict(input_data)[0]
             predicted_score = round(predicted_score, 2)
             
-            # 模型置信区间（简化版）
-            confidence = 0.9  # 置信度
+            # 计算置信度
+            # 基于测试集R²值计算置信度(R²取值范围为0-1，越接近1表示模型解释性越好)
+            confidence = max(0.6, min(0.95, test_r2))  # 置信度范围限制在0.6-0.95之间
             
             return render_template('predict.html', predicted_score=predicted_score, 
-                                  confidence=confidence, train_score=round(train_score*100, 2),
-                                  test_score=round(test_score*100, 2), 
+                                  confidence=confidence, train_score=round(train_r2*100, 2),
+                                  test_score=round(test_r2*100, 2), 
                                   regions=regions, departments=departments, 
                                   positions=positions, educations=educations, 
                                   majors=majors, years=years)
 
         except Exception as e:
-            return render_template('predict.html', error=str(e))
+            import traceback
+            print(f"预测错误: {str(e)}")
+            print(traceback.format_exc())
+            return render_template('predict.html', error=f"预测错误: {str(e)}", 
+                                  regions=regions, departments=departments, 
+                                  positions=positions, educations=educations, 
+                                  majors=majors, years=years)
 
 @app.route('/visualization', methods=['GET'])
 def visualization():
