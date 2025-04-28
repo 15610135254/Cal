@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}主页{% endblock %}
+
+{% block content %}
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="breadcrumb-holder">
+                    <h1 class="main-title float-left">公务员考试数据</h1>
+                    <ol class="breadcrumb float-right">
+                        <li class="breadcrumb-item"><a href="/index">主页</a></li>
+                        <li class="breadcrumb-item active">数据展示</li>
+                    </ol>
+                    <div class="clearfix"></div>
+                </div>
+            </div>
+        </div>
+        <!-- end row -->
+
+        <div class="row">
+            <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 col-xl-12">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h3 class="card-title">考试数据列表</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table id="exam-data-table" class="table table-bordered table-hover display">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th>年份</th>
+                                        <th>岗位代码</th>
+                                        <th>地区</th>
+                                        <th>部门名称</th>
+                                        <th>职位</th>
+                                        <th>学历</th>
+                                        <th>专业</th>
+                                        <th>招考人数</th>
+                                        <th>报考人数</th>
+                                        <th>分数线</th>
+                                        <th>最高分</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for resu in results %}
+                                    <tr>
+                                        <td>{{ resu.年份 }}</td>
+                                        <td>{{ resu.岗位代码 }}</td>
+                                        <td>{{ resu.地区 }}</td>
+                                        <td>{{ resu.部门名称 }}</td>
+                                        <td>{{ resu.职位 }}</td>
+                                        <td>{{ resu.学历 }}</td>
+                                        <td>{{ resu.专业 }}</td>
+                                        <td>{{ resu.招考人数 }}</td>
+                                        <td>{{ resu.报考人数 }}</td>
+                                        <td>{{ resu.分数线 }}</td>
+                                        <td>{{ resu.最高分 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div><!-- end card-->
+            </div>
+        </div>
+    </div>
+    <!-- END container-fluid -->
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+    $(document).ready(function() {
+        // 初始化DataTables
+        $('#exam-data-table').DataTable({
+            "language": {
+                "processing": "处理中...",
+                "lengthMenu": "显示 _MENU_ 项结果",
+                "zeroRecords": "没有匹配结果",
+                "info": "显示第 _START_ 至 _END_ 项结果，共 _TOTAL_ 项",
+                "infoEmpty": "显示第 0 至 0 项结果，共 0 项",
+                "infoFiltered": "(由 _MAX_ 项结果过滤)",
+                "search": "搜索：",
+                "emptyTable": "表中数据为空",
+                "loadingRecords": "载入中...",
+                "infoThousands": ",",
+                "paginate": {
+                    "first": "首页",
+                    "previous": "上页",
+                    "next": "下页",
+                    "last": "末页"
+                }
+            },
+            "pageLength": 10, // 每页显示10条记录
+            "lengthMenu": [10, 25, 50, 100], // 每页显示的记录数选项
+            "responsive": true, // 响应式布局
+            "order": [[0, "desc"]] // 默认按第一列降序排列
+        });
+    });
+</script>
+{% endblock %}

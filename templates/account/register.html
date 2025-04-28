@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基于Python的考公数据分析与预测系统 - 注册</title>
+
+    <!-- 引入Bootstrap CSS -->
+    <link href="/static/data/bootstrap.min.css" rel="stylesheet">
+
+    <!-- 引入DataTables CSS -->
+    <link href="/static/data/dataTables.bootstrap4.min.css" rel="stylesheet">
+
+    <style>
+        /* 自定义样式 */
+        body {
+            background: linear-gradient(to bottom, #6495ED, #FFB6C1); /* 渐变背景 */
+            color: white;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            margin: 20px auto;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .system-info {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .system-info h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #007BFF;
+        }
+
+        .system-info p {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-control {
+            border-radius: 5px;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-control:focus {
+            border-color: #007BFF;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #007BFF;
+            border: none;
+            color: white;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        .links {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+
+        .links a {
+            color: #007BFF;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .links a:hover {
+            color: #0056b3;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="system-info">
+            <h1>基于Python的考公数据分析与预测系统</h1>
+            <p>欢迎来到专业的考公数据分析与预测平台！</p>
+            <p>本系统提供全面的公务员考试数据分析和预测服务，帮助您科学备考，提高考试通过率。</p>
+        </div>
+
+        <form method="post" action="/signups">
+            <div class="form-group">
+                <input type="text" class="form-control" name="user" placeholder="用户名" required>
+            </div>
+
+            <div class="form-group">
+                <input type="email" class="form-control" name="email" placeholder="邮箱" required>
+            </div>
+
+            <div class="form-group">
+                <input type="password" class="form-control" name="password" placeholder="密码" required>
+            </div>
+
+            <button type="submit" class="btn">注册</button>
+
+            <div class="links">
+                <p>已有账号？<a href="/logins">立即登录</a></p>
+            </div>
+
+            {% if error %}
+                <p class="error-message">{{ error }}</p>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- 引入jQuery -->
+    <script src="/static/data/jquery-3.5.1.min.js"></script>
+
+    <!-- 引入Popper.js -->
+    <script src="/static/data/popper.min.js"></script>
+
+    <!-- 引入Bootstrap JS -->
+    <script src="/static/data/bootstrap.bundle.min.js"></script>
+
+    <!-- 引入DataTables JS -->
+    <script src="/static/data/jquery.dataTables.min.js"></script>
+    <script src="/static/data/dataTables.bootstrap4.min.js"></script>
+</body>
+</html>

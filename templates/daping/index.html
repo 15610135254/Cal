@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>基于Python的考公数据分析与预测系统</title>
+	<link rel="stylesheet" href="/static/daping/icon/iconfont.css">
+	<script src="/static/daping/js/jquery.min.js"></script>
+	<script src="/static/daping/js/echarts.min.js"></script>
+	
+
+</head>
+<body >
+<div class="container-header">
+    <ul class="nowTime">
+        <li></li>
+        <li></li>
+    </ul>
+    <div class="location">
+        <i class="icon iconfont icon-buoumaotubiao23"></i>
+        <span class="areaName"></span>
+    </div>
+    <h3 style="font-size: 30px"><a href="/index">基于Python的考公数据分析与预测系统</a></h3>
+</div>
+<div class="container-content">
+    <div class="top">
+		<div class="count-base" >
+			<div class="com-count-title">各专业平均分数线</div>
+			<div class="com-screen-content">
+				<div id="main1" style="width:350px;height:300px;"></div>
+			</div>
+            <script>
+    var dom = document.getElementById("main1");
+    var myChart = echarts.init(dom);
+
+    var option = {
+      tooltip: {
+        trigger: 'item'
+      },
+	  legend: {
+		orient: 'vertical',
+		left: 'left'
+	  },
+      series: [
+        {
+          name: '数',
+          type: 'pie',
+          radius: '50%',
+          data: {{fuzhuang_xiaoshou | safe}},
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }
+      ]
+    };
+
+    if (option && typeof option === 'object') {
+        myChart.setOption(option);
+    }
+
+    </script>
+
+
+			<span class="left-top"></span>
+			<span class="right-top"></span>
+			<span class="left-bottom"></span>
+			<span class="right-bottom"></span>
+		</div>
+		<div class="count-resource q1">
+			<div class="com-count-title">各专业报考人数</div>
+			<div class="com-screen-content2">
+				<div class="com-screen-content">
+				 <div id="main211" style="width:350px;height:300px;"></div>
+				</div>
+                <script>
+var dom = document.getElementById("main211");
+var myChart = echarts.init(dom);
+
+var option = {
+    tooltip: {
+        trigger: 'axis',
+        axisPointer: {            // 坐标轴指示器，坐标轴触发有效
+            type: 'shadow'        // 默认为直线，可选为：'line' | 'shadow'
+        }
+    },
+    grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+    },
+    xAxis: [
+        {
+            type: 'category',
+            data: {{type2_name | safe}},
+            axisTick: {
+                alignWithLabel: true
+            },
+             axisLabel: {
+                show: true,
+                textStyle: {
+                    color: '#ffffff'
+                }
+             }
+
+        }
+    ],
+    yAxis: [
+        {
+            type: 'value',
+           axisLabel : {
+                    textStyle: {
+                        color: '#ffffff'
+                    }
+                }
+
+        }
+    ],
+    series: [
+        {
+            name: '数',
+            type: 'bar',
+            barWidth: '60%',
+            data: {{type2_count | safe}},
+            backgroundStyle: {
+                        color: 'rgba(111, 162, 135, 0.2)'
+                    },
+            itemStyle: {
+                normal: {
+                    //这里是颜色
+                    color: function(params) {
+                        //注意，如果颜色太少的话，后面颜色不会自动循环，最好多定义几个颜色
+                        var colorList = ['#00A3E0','#FFA100', '#ffc0cb', '#CCCCCC', '#BBFFAA','#749f83', '#ca8622'];
+                        return colorList[params.dataIndex]
+                    }
+                }
+            }
+
+        }
+    ]
+};
+
+if (option && typeof option === 'object') {
+    myChart.setOption(option);
+}
+
+</script>
+				<span class="left-top"></span>
+				<span class="right-top"></span>
+				<span class="left-bottom"></span>
+				<span class="right-bottom"></span>
+			</div>
+		</div>
+		<div class="count-resource q2">
+			<div class="com-count-title">各专业招考人数</div>
+			<div class="com-screen-content">
+			 <div id="main3" style="width:350px;height:300px;">
+                  <script>
+        var dom = document.getElementById("main3");
+        var myChart = echarts.init(dom);
+
+        var option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {            // 坐标轴指示器，坐标轴触发有效
+                    type: 'shadow'        // 默认为直线，可选为：'line' | 'shadow'
+                }
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: [
+                {
+                    type: 'category',
+                    data: {{num_name | safe}},
+                    axisTick: {
+                        alignWithLabel: true
+                    },
+                    axisLabel: {
+                        show: true,
+                        textStyle: {
+                            color: '#ffffff'
+                        }
+                     }
+                }
+            ],
+            yAxis: [
+                {
+                    type: 'value',
+                    axisLabel: {
+                        show: true,
+                        textStyle: {
+                            color: '#ffffff'
+                        }
+                     }
+                }
+            ],
+            series: [
+                {
+                    name: '数',
+                    type: 'line',
+                    barWidth: '60%',
+                    data: {{num_count | safe}},
+                    itemStyle: {
+                            normal: {
+                                color: '#d7a02b'
+                                },
+                            }
+                }
+            ]
+        };
+
+        if (option && typeof option === 'object') {
+            myChart.setOption(option);
+        }
+
+        </script>
+             </div>
+			</div>
+			<span class="left-top"></span>
+			<span class="right-top"></span>
+			<span class="left-bottom"></span>
+			<span class="right-bottom"></span>
+		</div>
+    </div>
+    	<div class="mid">
+		<div class="count-share w1" >
+			<div class="com-count-title">词云图</div>
+			<div class="com-screen-content">
+                <div id="maincy1" style="width:550px;height:300px;">
+                </div>
+                <script type="text/javascript" src="/static/echarts.min.js"></script>
+                <script type="text/javascript" src="/static/echarts-wordcloud.js"></script>
+                <script>
+var dom = document.getElementById("maincy1");
+var myChart = echarts.init(dom);
+
+var option =  {
+    title: {
+         text: ''
+      },
+      tooltip: {},
+      series: [{
+        type: 'wordCloud',
+        gridSize: 2,
+        rotationRange: [0, 1000],
+        shape: 'triangle',
+        textStyle: {
+          normal: {
+            color: function () {
+              return 'rgb(' + [
+                Math.round(Math.random() * 160),
+                Math.round(Math.random() * 160),
+                Math.round(Math.random() * 160)
+              ].join(',') + ')';
+            }
+          },
+          emphasis: {
+            shadowBlur: 10,
+            shadowColor: '#333'
+          }
+        },
+        data: {{ title_count1 | safe}},
+      }]
+};
+
+if (option && typeof option === 'object') {
+    myChart.setOption(option);
+}
+
+</script>
+			</div>
+			<span class="left-top"></span>
+			<span class="right-top"></span>
+			<span class="left-bottom"></span>
+			<span class="right-bottom"></span>
+		</div>
+		<div class="count-share w2" >
+			<div class="com-count-title">各地区招考人数</div>
+			<div class="com-screen-content">
+			 <div id="maincy2" style="width:550px;height:300px;"></div>
+                <script>
+var dom = document.getElementById("maincy2");
+var myChart = echarts.init(dom);
+
+var option = {
+    tooltip: {
+        trigger: 'axis',
+        axisPointer: {            // 坐标轴指示器，坐标轴触发有效
+            type: 'shadow'        // 默认为直线，可选为：'line' | 'shadow'
+        }
+    },
+    grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true
+    },
+    xAxis: [
+        {
+            type: 'category',
+            data: {{title2_list | safe}},
+            axisTick: {
+                alignWithLabel: true
+            },
+             axisLabel: {
+                show: true,
+                textStyle: {
+                    color: '#ffffff'
+                }
+             }
+
+        }
+    ],
+    yAxis: [
+        {
+            type: 'value',
+           axisLabel : {
+                    textStyle: {
+                        color: '#ffffff'
+                    }
+                }
+
+        }
+    ],
+    series: [
+        {
+            name: '数',
+            type: 'line',
+            barWidth: '60%',
+            data: {{title2_count | safe}},
+            backgroundStyle: {
+                        color: 'rgba(111, 162, 135, 0.2)'
+                    },
+            itemStyle: {
+                normal: {
+                    //这里是颜色
+                    color: function(params) {
+                        //注意，如果颜色太少的话，后面颜色不会自动循环，最好多定义几个颜色
+                        var colorList = ['#00A3E0','#FFA100', '#ffc0cb', '#CCCCCC', '#BBFFAA','#749f83', '#ca8622'];
+                        return colorList[params.dataIndex]
+                    }
+                }
+            }
+
+        }
+    ]
+};
+
+if (option && typeof option === 'object') {
+    myChart.setOption(option);
+}
+
+</script>
+			</div>
+			<span class="left-top"></span>
+			<span class="right-top"></span>
+			<span class="left-bottom"></span>
+			<span class="right-bottom"></span>
+		</div>
+	</div>
+
+	<div class="clearfix"></div>
+</div>
+
+<script type="text/javascript">
+//根据不同的分辨率调用不同的css和js
+	if(window.screen.width>=1600){
+		document.write("<link href='/static/daping/css/test-1920.css' rel='stylesheet' type='text/css'>");
+	}
+	else if(window.screen.width<1600&&window.screen.width>=1280){
+		document.write("<link href='/static/daping/css/test-1280.css' rel='stylesheet' type='text/css'>");
+	}else{
+	document.write("<link href='/static/daping/css/test-1024.css' rel='stylesheet' type='text/css'>");
+	}
+</script>
+<script type="text/javascript"> 
+	  function autoScroll(obj){  
+			$(obj).find("ul").animate({  
+				marginTop : "-39px"  
+			},500,function(){  
+				$(this).css({marginTop : "0px"}).find("li:first").appendTo(this);  
+			})  
+		}  
+		$(function(){  
+			setInterval('autoScroll(".maquee")',2000);
+		}) 
+</script>
+<script>
+    //获取当前时间
+function getNowFormatDate() {
+    var date = new Date();
+    var year = date.getFullYear();
+    var month = date.getMonth() + 1;
+    var strDate = date.getDate();
+    var Hour =  date.getHours();       // 获取当前小时数(0-23)
+    var Minute =  date.getMinutes();     // 获取当前分钟数(0-59)
+    var Second = date.getSeconds();     // 获取当前秒数(0-59)
+    var show_day=new Array('星期日','星期一','星期二','星期三','星期四','星期五','星期六');
+    var day=date.getDay();
+    if (Hour<10) {
+        Hour = "0" + Hour;
+    }
+    if (Minute <10) {
+        Minute = "0" + Minute;
+    }
+    if (Second <10) {
+        Second = "0" + Second;
+    }
+    if (month >= 1 && month <= 9) {
+        month = "0" + month;
+    }
+    if (strDate >= 0 && strDate <= 9) {
+        strDate = "0" + strDate;
+    }
+    var currentdate = '<div><p>'+year + '年' + month +'月' + strDate+'号</p><p>'+show_day[day]+'</p></div>';
+    var HMS = Hour + ':' + Minute +':' + Second;
+	var temp_time = year+'-'+month+'-'+strDate+' '+HMS;
+    $('.nowTime li:nth-child(1)').html(HMS);
+    $('.nowTime li:nth-child(2)').html(currentdate);
+	//$('.topRec_List li div:nth-child(3)').html(temp_time);
+    setTimeout(getNowFormatDate,1000);//每隔1秒重新调用一次该函数
+}
+getNowFormatDate()
+</script>
+</body>
+</html>

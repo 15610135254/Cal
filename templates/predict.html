@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}考公预测{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h4>考公预测</h4>
+    </div>
+    <div class="card-body">
+        {% if error %}
+        <div class="alert alert-danger">
+            <strong>错误:</strong> {{ error }}
+        </div>
+        {% endif %}
+        <form method="POST" action="/predict" id="predictForm">
+            <div class="form-group">
+                <label for="region">地区</label>
+                <select class="form-control" id="region" name="region" required>
+                    <option value="">-- 请选择地区 --</option>
+                    {% for region in regions %}
+                    <option value="{{ region }}">{{ region }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="department">部门名称</label>
+                <select class="form-control" id="department" name="department" required disabled>
+                    <option value="">-- 请先选择地区 --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="position">职位</label>
+                <select class="form-control" id="position" name="position" required disabled>
+                    <option value="">-- 请先选择部门 --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="education">学历</label>
+                <select class="form-control" id="education" name="education" required>
+                    {% for education in educations %}
+                    <option value="{{ education }}">{{ education }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="major">专业</label>
+                <select class="form-control" id="major" name="major" required disabled>
+                    <option value="">-- 请先选择职位 --</option>
+                </select>
+            </div>
+            {% if years %}
+            <div class="form-group">
+                <label for="year">年份</label>
+                <select class="form-control" id="year" name="year">
+                    <option value="">-- 选择年份 --</option>
+                    {% for year in years %}
+                    <option value="{{ year }}">{{ year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="form-group">
+                <label for="recruitment_num">招考人数</label>
+                <input type="number" class="form-control" id="recruitment_num" name="recruitment_num" required>
+            </div>
+            <div class="form-group">
+                <label for="application_num">报考人数</label>
+                <input type="number" class="form-control" id="application_num" name="application_num" required>
+            </div>
+            <button type="submit" class="btn btn-primary">预测</button>
+        </form>
+        {% if predicted_score %}
+        <div class="mt-4">
+            <div class="alert alert-success">
+                <h4>预测分数线: {{ predicted_score }}</h4>
+                <p>模型置信度: {{ confidence * 100 }}%</p>
+            </div>
+            
+            <div class="mt-3">
+                <h5>模型评估指标:</h5>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ train_score }}%" 
+                         aria-valuenow="{{ train_score }}" aria-valuemin="0" aria-valuemax="100">
+                        训练集准确率: {{ train_score }}%
+                    </div>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar bg-info" role="progressbar" style="width: {{ test_score }}%" 
+                         aria-valuenow="{{ test_score }}" aria-valuemin="0" aria-valuemax="100">
+                        测试集准确率: {{ test_score }}%
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                    <p><strong>小贴士:</strong> 考公分数受多种因素影响，本预测仅供参考。实际分数可能受政策变化、考试难度、报考人数变化等多种因素影响。</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const regionSelect = document.getElementById('region');
+    const departmentSelect = document.getElementById('department');
+    const positionSelect = document.getElementById('position');
+    const majorSelect = document.getElementById('major');
+    
+    // 表单提交前移除disabled属性
+    document.querySelector('form').addEventListener('submit', function(event) {
+        // 用于调试
+        console.log("表单正在提交...");
+        
+        // 移除所有下拉菜单的disabled属性，确保值能被提交
+        departmentSelect.disabled = false;
+        positionSelect.disabled = false;
+        majorSelect.disabled = false;
+        
+        console.log("表单数据:");
+        console.log("地区:", regionSelect.value);
+        console.log("部门:", departmentSelect.value);
+        console.log("职位:", positionSelect.value);
+        console.log("专业:", majorSelect.value);
+    });
+    
+    // 当地区选择改变时
+    regionSelect.addEventListener('change', function() {
+        const region = this.value;
+        
+        // 重置部门、职位和专业选择
+        departmentSelect.innerHTML = '<option value="">-- 请选择部门 --</option>';
+        positionSelect.innerHTML = '<option value="">-- 请先选择部门 --</option>';
+        majorSelect.innerHTML = '<option value="">-- 请先选择职位 --</option>';
+        
+        // 禁用部门、职位和专业选择
+        departmentSelect.disabled = true;
+        positionSelect.disabled = true;
+        majorSelect.disabled = true;
+        
+        if (region) {
+            // 获取该地区的部门
+            fetch(`/api/get_departments?region=${encodeURIComponent(region)}`)
+                .then(response => response.json())
+                .then(departments => {
+                    if (departments.length > 0) {
+                        // 将部门添加到选择框
+                        departments.forEach(department => {
+                            const option = document.createElement('option');
+                            option.value = department;
+                            option.textContent = department;
+                            departmentSelect.appendChild(option);
+                        });
+                        
+                        // 启用部门选择
+                        departmentSelect.disabled = false;
+                    }
+                });
+        }
+    });
+    
+    // 当部门选择改变时
+    departmentSelect.addEventListener('change', function() {
+        const region = regionSelect.value;
+        const department = this.value;
+        
+        // 重置职位和专业选择
+        positionSelect.innerHTML = '<option value="">-- 请选择职位 --</option>';
+        majorSelect.innerHTML = '<option value="">-- 请先选择职位 --</option>';
+        
+        // 禁用职位和专业选择
+        positionSelect.disabled = true;
+        majorSelect.disabled = true;
+        
+        if (department) {
+            // 获取该地区和部门的职位
+            fetch(`/api/get_positions?region=${encodeURIComponent(region)}&department=${encodeURIComponent(department)}`)
+                .then(response => response.json())
+                .then(positions => {
+                    if (positions.length > 0) {
+                        // 将职位添加到选择框
+                        positions.forEach(position => {
+                            const option = document.createElement('option');
+                            option.value = position;
+                            option.textContent = position;
+                            positionSelect.appendChild(option);
+                        });
+                        
+                        // 启用职位选择
+                        positionSelect.disabled = false;
+                    }
+                });
+        }
+    });
+    
+    // 当职位选择改变时
+    positionSelect.addEventListener('change', function() {
+        const region = regionSelect.value;
+        const department = departmentSelect.value;
+        const position = this.value;
+        
+        // 重置专业选择
+        majorSelect.innerHTML = '<option value="">-- 请选择专业 --</option>';
+        
+        // 禁用专业选择
+        majorSelect.disabled = true;
+        
+        if (position) {
+            // 获取该地区、部门和职位的专业
+            fetch(`/api/get_majors?region=${encodeURIComponent(region)}&department=${encodeURIComponent(department)}&position=${encodeURIComponent(position)}`)
+                .then(response => response.json())
+                .then(majors => {
+                    if (majors.length > 0) {
+                        // 将专业添加到选择框
+                        majors.forEach(major => {
+                            const option = document.createElement('option');
+                            option.value = major;
+                            option.textContent = major;
+                            majorSelect.appendChild(option);
+                        });
+                        
+                        // 启用专业选择
+                        majorSelect.disabled = false;
+                    }
+                });
+        }
+    });
+});
+</script>
+{% endblock %}
