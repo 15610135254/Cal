@@ -141,16 +141,5 @@ if __name__ == '__main__':
         normal_role = user_datastore.find_role('admin')
         db.session.add(new_user)
         user_datastore.add_role_to_user(new_user, normal_role)
-    # 设置flask-security
-    user_datastore = SQLAlchemySessionUserDatastore(db.session, User, Role)
-    security = Security(app, user_datastore)
-    user_datastore.create_role(name='admin', description='管理员')  # 注册管理员权限
-    user_datastore.create_role(name='User', description='普通用户')  # 注册用户权限
-    db.session.commit()
-    new_user = user_datastore.create_user(username='admin', password='root123456', email='123@qq.com',
-                                          active=True)  # 注册管理员
-    normal_role = user_datastore.find_role('admin')
-    db.session.add(new_user)
-    user_datastore.add_role_to_user(new_user, normal_role)
-    db.session.commit()
+        db.session.commit()
 

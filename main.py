@@ -1,54 +1,85 @@
 # !/usr/bin/env python
 # _*_ coding: utf-8 _*_
-import random
-
-from flask import Flask, request, render_template,jsonify,abort,session,redirect, url_for
+# 标准库导入
 import os
-import models
-from models import app
 import time
-from sqlalchemy import or_,and_
-import pandas
-import numpy as np
 import datetime
-from flask_security import Security, SQLAlchemySessionUserDatastore, \
-    UserMixin, RoleMixin, login_required, auth_token_required, http_auth_required,current_user
-import pickle  # 导入pickle模块，用于加载LightGBM模型
 
+# 第三方库导入
+import numpy as np
+import pandas as pd
+import jieba
+import pickle
+
+# Flask相关导入
+from flask import Flask, request, render_template, jsonify, abort, session, redirect, url_for
+from flask_security import Security, SQLAlchemySessionUserDatastore, \
+    UserMixin, RoleMixin, login_required, auth_token_required, http_auth_required, current_user
+from flask_security.utils import login_user, logout_user
+from sqlalchemy import or_, and_
+
+# 本地模块导入
+import models
+from models import app, db
+
+# 设置Flask-Security
 user_datastore = SQLAlchemySessionUserDatastore(models.db.session, models.User, models.Role)
 security = Security(app, user_datastore)
 
+# 公共数据加载函数
+def load_data_from_db(filter_condition=None):
+    """
+    从数据库加载数据并进行预处理
+    参数:
+        filter_condition: 可选，用于过滤数据的条件函数
+    返回:
+        处理后的DataFrame
+    """
+    try:
+        # 使用pandas从数据库读取数据
+        sql_command = 'select * from XinXi'
+        df = pd.read_sql(sql_command, models.db.engine)
+        
+        # 去除包含NaN的行
+        df.dropna(inplace=True)
+        
+        # 应用过滤条件（如果有）
+        if filter_condition is not None:
+            df = df[filter_condition(df)]
+            
+        return df
+    except Exception as e:
+        print(f"数据加载错误: {e}")
+        return pd.DataFrame()  # 返回空DataFrame
 
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
-def index():#主页
+def index():  # 主页
     uuid = current_user.is_anonymous
     if uuid:
         return redirect(url_for('logins'))
     if request.method == 'GET':
         results = models.XinXi.query.all()[:1000]
-        return render_template('index.html',**locals())
+        return render_template('index.html', **locals())
 
-import jieba
-import pandas as pd
 @app.route('/keshihua', methods=['GET', 'POST'])
-def keshihua():#主页
+def keshihua():  # 可视化页面
     uuid = current_user.is_anonymous
     if uuid:
         return redirect(url_for('logins'))
     if request.method == 'GET':
-        sql_command = 'select * from XinXi'
-        df = pd.read_sql(sql_command, models.db.engine)
-
+        df = load_data_from_db()
+        
+        # 对专业列进行过滤
         df.dropna(subset=['专业'], inplace=True)
 
         # 各专业平均分数线
         dys = df['分数线'].groupby(df['专业']).mean().head(20)
         fuzhuang_xiaoshou = []
         for i in range(len(dys.values.tolist())):
-            fuzhuang_xiaoshou.append({"name":list(dys.index)[i],"value":round(dys.values.tolist()[i],10)})
+            fuzhuang_xiaoshou.append({"name": list(dys.index)[i], "value": round(dys.values.tolist()[i], 10)})
 
-        # #各专业报考人数
+        # 各专业报考人数
         fuzhuang_type2 = {key: value for key, value in df['报考人数'].groupby(df['专业']).mean().items()}
         fuzhuang_type2 = sorted(fuzhuang_type2.items(), key=lambda x: x[1], reverse=True)
         type2_name = []
@@ -57,8 +88,8 @@ def keshihua():#主页
             type2_name.append(resu[0])
             type2_count.append(round(resu[1]))
 
-        # # 各专业招考人数
-        fuzhuang_pinbai = {key: round(value, 2) for key, value in  df['招考人数'].groupby(df['专业']).mean().items()}
+        # 各专业招考人数
+        fuzhuang_pinbai = {key: round(value, 2) for key, value in df['招考人数'].groupby(df['专业']).mean().items()}
         fuzhuang_pinbai = sorted(fuzhuang_pinbai.items(), key=lambda x: x[1], reverse=True)
         num_name = []
         num_count = []
@@ -82,38 +113,34 @@ def keshihua():#主页
         title_count1 = title_count1[:100]
 
         # 各地区招考人数
-        title2_list = []
-        title2_count = []
         datas11 = [i[0] for i in df[['地区']].values.tolist()]
         type1s = list(set(datas11))
         type1s.sort()
         li1 = []
         for type1 in type1s:
-            li1.append((type1, df[df['地区']==type1]['招考人数'].sum()))
+            li1.append((type1, df[df['地区'] == type1]['招考人数'].sum()))
         title2_list = []
         title2_count = []
         for resu in li1:
             title2_list.append(resu[0])
             title2_count.append(resu[1])
 
-
         return render_template('daping/index.html', **locals())
 
-from flask_security.utils import login_user, logout_user
 @app.route('/logins', methods=['GET', 'POST'])
 def logins():
     uuid = current_user.is_anonymous
     if not uuid:
         return redirect(url_for('index'))
-    if request.method=='GET':
+    if request.method == 'GET':
         return render_template('account/index.html')
-    elif request.method=='POST':
+    elif request.method == 'POST':
         user = request.form.get('user')
         password = request.form.get('password')
         drone = request.form.get('drone')
-        data = models.User.query.filter(and_(models.User.username==user,models.User.password==password)).first()
+        data = models.User.query.filter(and_(models.User.username == user, models.User.password == password)).first()
         if not data:
-            return render_template('account/index.html',error='账号密码错误')
+            return render_template('account/index.html', error='账号密码错误')
         else:
             if drone == '用户登陆':
                 # 如果用户选择用户登录，则登录用户
@@ -128,15 +155,11 @@ def logins():
                     # 如果用户无管理员权限，返回错误信息
                     return render_template('login.html', error='用户无管理员权限')
 
-
-
 @app.route('/loginsout', methods=['GET'])
 def loginsout():
-    if request.method=='GET':
+    if request.method == 'GET':
         logout_user()
         return redirect(url_for('logins'))
-
-
 
 @app.route('/signups', methods=['GET', 'POST'])
 def signups():
@@ -163,13 +186,11 @@ def signups():
 
             return redirect(url_for('index'))
 
-
 @app.route('/usercenter', methods=['GET'])
 @login_required
 def usercenter():
     return render_template('usercenter.html')
 
-from models import db
 @app.route('/update_password', methods=['POST'])
 @login_required
 def update_password():
@@ -191,14 +212,6 @@ def update_password():
 
     return render_template('usercenter.html', success='密码修改成功')
 
-
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
-import pandas as pd
-import numpy as np
-
-
 @app.route('/predict', methods=['GET', 'POST'])
 def predict():
     uuid = current_user.is_anonymous
@@ -206,12 +219,8 @@ def predict():
         return redirect(url_for('logins'))
 
     if request.method == 'GET':
-        # 使用 pandas 读取数据
-        sql_command = 'select * from XinXi'
-        df = pd.read_sql(sql_command, models.db.engine)
-
-        # 去除包含 NaN 的行
-        df.dropna(inplace=True)
+        # 加载数据
+        df = load_data_from_db()
 
         # 获取去重后的字符串类型特征值
         regions = df['地区'].unique().tolist()
@@ -222,7 +231,7 @@ def predict():
         years = df['年份'].unique().tolist() if '年份' in df.columns else []
 
         return render_template('predict.html', regions=regions, departments=departments, positions=positions,
-                               educations=educations, majors=majors, years=years)
+                              educations=educations, majors=majors, years=years)
 
     elif request.method == 'POST':
         # 打印接收到的表单数据
@@ -230,12 +239,8 @@ def predict():
         print("表单数据:", request.form)
         
         try:
-            # 使用 pandas 读取数据
-            sql_command = 'select * from XinXi'
-            df = pd.read_sql(sql_command, models.db.engine)
-
-            # 去除包含 NaN 的行
-            df.dropna(inplace=True)
+            # 加载数据
+            df = load_data_from_db()
 
             # 获取去重后的字符串类型特征值
             regions = df['地区'].unique().tolist()
@@ -487,6 +492,99 @@ def predict():
                                   positions=positions, educations=educations, 
                                   majors=majors, years=years)
 
+# 提取数据可视化公共函数
+def prepare_visualization_data(df, keyword=None):
+    """准备可视化数据"""
+    # 模糊匹配地区、年份、职位、学历
+    if keyword:
+        df = df[df.apply(lambda row: any(keyword in str(row[col]) for col in ['地区', '年份', '职位', '学历']), axis=1)]
+
+    # 1. 各专业平均分数线
+    dys = df['分数线'].groupby(df['专业']).mean().head(20)
+    fuzhuang_xiaoshou = []
+    for i in range(len(dys.values.tolist())):
+        fuzhuang_xiaoshou.append({"name": list(dys.index)[i], "value": round(dys.values.tolist()[i], 10)})
+
+    # 2. 各专业报考人数
+    fuzhuang_type2 = {key: value for key, value in df['报考人数'].groupby(df['专业']).mean().items()}
+    fuzhuang_type2 = sorted(fuzhuang_type2.items(), key=lambda x: x[1], reverse=True)
+    type2_name = []
+    type2_count = []
+    for resu in fuzhuang_type2[:10]:
+        type2_name.append(resu[0])
+        type2_count.append(round(resu[1]))
+
+    # 3. 各专业招考人数
+    fuzhuang_pinbai = {key: round(value, 2) for key, value in df['招考人数'].groupby(df['专业']).mean().items()}
+    fuzhuang_pinbai = sorted(fuzhuang_pinbai.items(), key=lambda x: x[1], reverse=True)
+    num_name = []
+    num_count = []
+    for resu in fuzhuang_pinbai[:10]:
+        num_name.append(resu[0])
+        num_count.append(resu[1])
+
+    # 4. 词云图
+    a = [da1[0] for da1 in df[['专业']].values.tolist()[:100]]
+    b = ' '.join(a)
+    c = jieba.lcut(b)
+    values = []
+    for key in c:
+        if key.strip():
+            values.append(key.strip())
+    list11 = list(set(values))
+    title_count1 = []
+    for resu1 in list11:
+        title_count1.append({"name": resu1, "value": values.count(resu1)})
+    title_count1.sort(key=lambda xx: xx['value'], reverse=True)
+    title_count1 = title_count1[:100]
+
+    # 5. 各地区招考人数
+    datas11 = [i[0] for i in df[['地区']].values.tolist()]
+    type1s = list(set(datas11))
+    type1s.sort()
+    li1 = []
+    for type1 in type1s:
+        li1.append((type1, df[df['地区'] == type1]['招考人数'].sum()))
+    title2_list = []
+    title2_count = []
+    for resu in li1:
+        title2_list.append(resu[0])
+        title2_count.append(resu[1])
+
+    # 6. 各地区平均分数线
+    region_avg_score = df['分数线'].groupby(df['地区']).mean()
+    region_avg_score = region_avg_score.sort_values(ascending=False)
+    region_avg_score_list = region_avg_score.index.tolist()
+    region_avg_score_count = region_avg_score.values.tolist()
+
+    # 7. 各学历平均分数线
+    education_avg_score = df['分数线'].groupby(df['学历']).mean()
+    education_avg_score = education_avg_score.sort_values(ascending=False)
+    education_avg_score_list = education_avg_score.index.tolist()
+    education_avg_score_count = education_avg_score.values.tolist()
+
+    # 8. 各职位平均分数线
+    position_avg_score = df['分数线'].groupby(df['职位']).mean()
+    # 过滤掉可能的0值或异常值
+    position_avg_score = position_avg_score[position_avg_score > 0]
+    position_avg_score = position_avg_score.sort_values(ascending=False)
+    position_avg_score_list = position_avg_score.index.tolist()
+    position_avg_score_count = position_avg_score.values.tolist()
+
+    # 9. 各专业最高分
+    major_max_score = df['最高分'].groupby(df['专业']).max()
+    major_max_score = major_max_score.sort_values(ascending=False)
+    major_max_score_list = major_max_score.index.tolist()
+    major_max_score_count = major_max_score.values.tolist()
+
+    # 10. 各地区报考人数
+    region_application_num = df['报考人数'].groupby(df['地区']).sum()
+    region_application_num = region_application_num.sort_values(ascending=False)
+    region_application_num_list = region_application_num.index.tolist()
+    region_application_num_count = region_application_num.values.tolist()
+    
+    return locals()
+
 @app.route('/visualization', methods=['GET'])
 def visualization():
     uuid = current_user.is_anonymous
@@ -497,112 +595,21 @@ def visualization():
         # 获取关键词
         keyword = request.args.get('keyword', '')
 
-        # 使用 pandas 读取数据
-        sql_command = 'select * from XinXi'
-        df = pd.read_sql(sql_command, models.db.engine)
-
-        # 去除包含 NaN 的行
-        df.dropna(inplace=True)
-
-        # 模糊匹配地区、年份、职位、学历
-        if keyword:
-            df = df[df.apply(lambda row: any(keyword in str(row[col]) for col in ['地区', '年份', '职位', '学历']), axis=1)]
-
-        # 1. 各专业平均分数线
-        dys = df['分数线'].groupby(df['专业']).mean().head(20)
-        fuzhuang_xiaoshou = []
-        for i in range(len(dys.values.tolist())):
-            fuzhuang_xiaoshou.append({"name":list(dys.index)[i],"value":round(dys.values.tolist()[i],10)})
-
-        # 2. 各专业报考人数
-        fuzhuang_type2 = {key: value for key, value in df['报考人数'].groupby(df['专业']).mean().items()}
-        fuzhuang_type2 = sorted(fuzhuang_type2.items(), key=lambda x: x[1], reverse=True)
-        type2_name = []
-        type2_count = []
-        for resu in fuzhuang_type2[:10]:
-            type2_name.append(resu[0])
-            type2_count.append(round(resu[1]))
-
-        # 3. 各专业招考人数
-        fuzhuang_pinbai = {key: round(value, 2) for key, value in  df['招考人数'].groupby(df['专业']).mean().items()}
-        fuzhuang_pinbai = sorted(fuzhuang_pinbai.items(), key=lambda x: x[1], reverse=True)
-        num_name = []
-        num_count = []
-        for resu in fuzhuang_pinbai[:10]:
-            num_name.append(resu[0])
-            num_count.append(resu[1])
-
-        # 4. 词云图
-        a = [da1[0] for da1 in df[['专业']].values.tolist()[:100]]
-        b = ' '.join(a)
-        c = jieba.lcut(b)
-        values = []
-        for key in c:
-            if key.strip():
-                values.append(key.strip())
-        list11 = list(set(values))
-        title_count1 = []
-        for resu1 in list11:
-            title_count1.append({"name": resu1, "value": values.count(resu1)})
-        title_count1.sort(key=lambda xx: xx['value'], reverse=True)
-        title_count1 = title_count1[:100]
-
-        # 5. 各地区招考人数
-        title2_list = []
-        title2_count = []
-        datas11 = [i[0] for i in df[['地区']].values.tolist()]
-        type1s = list(set(datas11))
-        type1s.sort()
-        li1 = []
-        for type1 in type1s:
-            li1.append((type1, df[df['地区']==type1]['招考人数'].sum()))
-        title2_list = []
-        title2_count = []
-        for resu in li1:
-            title2_list.append(resu[0])
-            title2_count.append(resu[1])
-
-        # 6. 各地区平均分数线
-        region_avg_score = df['分数线'].groupby(df['地区']).mean()
-        region_avg_score = region_avg_score.sort_values(ascending=False)
-        region_avg_score_list = region_avg_score.index.tolist()
-        region_avg_score_count = region_avg_score.values.tolist()
-
-        # 7. 各学历平均分数线
-        education_avg_score = df['分数线'].groupby(df['学历']).mean()
-        education_avg_score = education_avg_score.sort_values(ascending=False)
-        education_avg_score_list = education_avg_score.index.tolist()
-        education_avg_score_count = education_avg_score.values.tolist()
-
-        # 8. 各职位平均分数线
-        position_avg_score = df['分数线'].groupby(df['职位']).mean()
-        # 过滤掉可能的0值或异常值
-        position_avg_score = position_avg_score[position_avg_score > 0]
-        position_avg_score = position_avg_score.sort_values(ascending=False)
-        position_avg_score_list = position_avg_score.index.tolist()
-        position_avg_score_count = position_avg_score.values.tolist()
-
-        # 9. 各专业最高分
-        major_max_score = df['最高分'].groupby(df['专业']).max()
-        major_max_score = major_max_score.sort_values(ascending=False)
-        major_max_score_list = major_max_score.index.tolist()
-        major_max_score_count = major_max_score.values.tolist()
-
-        # 10. 各地区报考人数
-        region_application_num = df['报考人数'].groupby(df['地区']).sum()
-        region_application_num = region_application_num.sort_values(ascending=False)
-        region_application_num_list = region_application_num.index.tolist()
-        region_application_num_count = region_application_num.values.tolist()
-
-
+        # 加载数据
+        df = load_data_from_db()
+        
+        # 准备可视化数据
+        vis_data = prepare_visualization_data(df, keyword)
+        
         # 自定义zip过滤器
         def zip_filter(a, b):
             return zip(a, b)
 
         app.jinja_env.filters['zip'] = zip_filter
 
-        return render_template('visualization.html', **locals())
+        return render_template('visualization.html', **vis_data)
 
+# API端点
 @app.route('/api/get_departments', methods=['GET'])
 def get_departments():
     """根据地区获取部门列表"""
@@ -610,9 +617,8 @@ def get_departments():
     if not region:
         return jsonify([])
     
-    # 查询指定地区的所有部门
-    sql_command = 'select * from XinXi'
-    df = pd.read_sql(sql_command, models.db.engine)
+    # 加载数据
+    df = load_data_from_db()
     
     # 过滤特定地区
     filtered_df = df[df['地区'] == region]
@@ -628,9 +634,8 @@ def get_positions():
     if not region or not department:
         return jsonify([])
     
-    # 查询指定地区和部门的所有职位
-    sql_command = 'select * from XinXi'
-    df = pd.read_sql(sql_command, models.db.engine)
+    # 加载数据
+    df = load_data_from_db()
     
     # 过滤特定地区和部门
     filtered_df = df[(df['地区'] == region) & (df['部门名称'] == department)]
@@ -647,9 +652,8 @@ def get_majors():
     if not region or not department or not position:
         return jsonify([])
     
-    # 查询指定地区、部门和职位的所有专业
-    sql_command = 'select * from XinXi'
-    df = pd.read_sql(sql_command, models.db.engine)
+    # 加载数据
+    df = load_data_from_db()
     
     # 过滤特定地区、部门和职位
     filtered_df = df[(df['地区'] == region) & 
