@@ -21,7 +21,7 @@
 
         <div class="row">
             <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12 col-xl-12">
-                <div class="card mb-3">
+                <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">考试数据列表</h3>
                     </div>
@@ -61,6 +61,48 @@
                                     {% endfor %}
                                 </tbody>
                             </table>
+                            
+                            <!-- 分页导航 -->
+                            {% if pagination %}
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-center">
+                                    {% if pagination.has_prev %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('index', page=pagination.prev_num) }}">&laquo; 上一页</a>
+                                    </li>
+                                    {% endif %}
+                                    
+                                    {% for page in pagination.iter_pages() %}
+                                        {% if page %}
+                                            {% if page != pagination.page %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="{{ url_for('index', page=page) }}">{{ page }}</a>
+                                            </li>
+                                            {% else %}
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ page }}</span>
+                                            </li>
+                                            {% endif %}
+                                        {% else %}
+                                            <li class="page-item disabled">
+                                                <span class="page-link">...</span>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if pagination.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('index', page=pagination.next_num) }}">下一页 &raquo;</a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                            <div class="text-center">
+                                <small class="text-muted">
+                                    显示第 {{ pagination.page }} 页，共 {{ pagination.pages }} 页，总计 {{ pagination.total }} 条记录
+                                </small>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div><!-- end card-->
@@ -75,30 +117,23 @@
 {% block script %}
 <script>
     $(document).ready(function() {
-        // 初始化DataTables
+        // 初始化DataTables，但禁用其内置分页
         $('#exam-data-table').DataTable({
+            "paging": false,  // 禁用DataTables的分页
             "language": {
                 "processing": "处理中...",
                 "lengthMenu": "显示 _MENU_ 项结果",
                 "zeroRecords": "没有匹配结果",
-                "info": "显示第 _START_ 至 _END_ 项结果，共 _TOTAL_ 项",
-                "infoEmpty": "显示第 0 至 0 项结果，共 0 项",
+                "info": "共 _TOTAL_ 条记录",
+                "infoEmpty": "没有记录",
                 "infoFiltered": "(由 _MAX_ 项结果过滤)",
                 "search": "搜索：",
                 "emptyTable": "表中数据为空",
                 "loadingRecords": "载入中...",
                 "infoThousands": ",",
-                "paginate": {
-                    "first": "首页",
-                    "previous": "上页",
-                    "next": "下页",
-                    "last": "末页"
-                }
             },
-            "pageLength": 10, // 每页显示10条记录
-            "lengthMenu": [10, 25, 50, 100], // 每页显示的记录数选项
-            "responsive": true, // 响应式布局
-            "order": [[0, "desc"]] // 默认按第一列降序排列
+            "responsive": true,
+            "order": [[0, "desc"]]  // 默认按年份降序排列
         });
     });
 </script>

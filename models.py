@@ -7,8 +7,11 @@ from flask_babelex import Babel
 from flask_security import Security, SQLAlchemySessionUserDatastore, \
     UserMixin, RoleMixin, login_required, auth_token_required, http_auth_required
 
+# 修改为直接导入 Flask 
+from flask import Flask
 
-app = flask.Flask(__name__)
+# 修改应用创建方式
+app = Flask(__name__)
 abel = Babel(app)
 app.config['BABEL_DEFAULT_LOCALE'] = 'zh_CN'
 
@@ -18,15 +21,14 @@ app.config['SQLALCHEMY_ECHO'] = False
 app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = False
 app.config['SECRET_KEY'] = ''
 
-# host = '127.0.0.1'
-# user = 'root'
-# password = '123456'
-# database = 'xinxi'
-# app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://%s:%s@%s:3306/%s" % (user, password, host,database)
+# MySQL数据库配置
+host = '127.0.0.1'
+user = 'root'
+password = ''  # 无密码
+database = 'xinxi'
+app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://%s:%s@%s:3306/%s" % (user, password, host, database)
 
-
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
-    'DATABASE_URL', 'sqlite:///' + os.path.join(app.root_path, 'xinxi.db'))
+# 安全配置
 app.config['SECURITY_PASSWORD_SALT'] = '123456789'
 app.config['SECURITY_PASSWORD_HASH'] = 'sha512_crypt'
 
@@ -78,19 +80,19 @@ class User(db.Model, UserMixin):
 class XinXi(db.Model):
     __tablename__ = 'XinXi'
 
-    id = db.Column(db.Integer, unique=True, primary_key=True)
-
-    年份 = db.Column(db.String(124))
-    岗位代码 = db.Column(db.String(124))
-    地区 = db.Column(db.String(124))
-    部门名称 = db.Column(db.String(124))
-    职位 = db.Column(db.String(124))
-    学历 = db.Column(db.String(124))
-    专业 = db.Column(db.String(124))
-    招考人数 = db.Column(db.FLOAT)
-    报考人数 = db.Column(db.FLOAT)
-    分数线 = db.Column(db.FLOAT)
-    最高分 = db.Column(db.FLOAT)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    年份 = db.Column(db.String(10))
+    岗位代码 = db.Column(db.String(20))
+    地区 = db.Column(db.String(50))
+    部门名称 = db.Column(db.String(100))
+    职位 = db.Column(db.String(100))
+    学历 = db.Column(db.String(50))
+    专业 = db.Column(db.String(200))
+    招考人数 = db.Column(db.Float)
+    报考人数 = db.Column(db.Float)
+    分数线 = db.Column(db.Float)
+    最高分 = db.Column(db.Float)
+    城市 = db.Column(db.String(50))
 
     def __str__(self):
         return '<XinXi {}>'.format(self.岗位代码)
@@ -141,5 +143,5 @@ if __name__ == '__main__':
         normal_role = user_datastore.find_role('admin')
         db.session.add(new_user)
         user_datastore.add_role_to_user(new_user, normal_role)
-        db.session.commit()
+    db.session.commit()
 

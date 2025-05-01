@@ -55,12 +55,23 @@ def load_data_from_db(filter_condition=None):
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
 def index():  # 主页
+    # 恢复登录检查
     uuid = current_user.is_anonymous
     if uuid:
         return redirect(url_for('logins'))
     if request.method == 'GET':
-        results = models.XinXi.query.all()[:1000]
-        return render_template('index.html', **locals())
+        # 获取页码参数，默认为第1页
+        page = request.args.get('page', 1, type=int)
+        # 每页显示50条记录
+        per_page = 50
+        # 使用paginate进行分页
+        pagination = models.XinXi.query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        results = pagination.items
+        return render_template('index.html', results=results, pagination=pagination)
 
 @app.route('/keshihua', methods=['GET', 'POST'])
 def keshihua():  # 可视化页面
@@ -69,7 +80,7 @@ def keshihua():  # 可视化页面
         return redirect(url_for('logins'))
     if request.method == 'GET':
         df = load_data_from_db()
-        
+
         # 对专业列进行过滤
         df.dropna(subset=['专业'], inplace=True)
 
@@ -135,25 +146,40 @@ def logins():
     if request.method == 'GET':
         return render_template('account/index.html')
     elif request.method == 'POST':
-        user = request.form.get('user')
-        password = request.form.get('password')
-        drone = request.form.get('drone')
-        data = models.User.query.filter(and_(models.User.username == user, models.User.password == password)).first()
-        if not data:
-            return render_template('account/index.html', error='账号密码错误')
-        else:
+        user_input = request.form.get('user')
+        password_input = request.form.get('password')
+        drone = request.form.get('drone') # 用户类型：用户登陆 或 管理员登陆
+
+        # 1. 根据用户名查找用户
+        user_data = models.User.query.filter_by(username=user_input).first()
+
+        # 2. 验证用户是否存在以及密码是否正确
+        if user_data and user_data.verify_password(password_input):
+            # 密码验证通过
             if drone == '用户登陆':
-                # 如果用户选择用户登录，则登录用户
-                login_user(data, remember=True)
+                # 用户登录
+                login_user(user_data, remember=True)
                 return redirect(url_for('index'))
-            for resu in models.User.query.get(data.id).roles:
-                if resu.name == 'admin' and drone == '管理员登陆':
-                    # 如果用户选择管理员登录且具有管理员权限，则登录用户
-                    login_user(data, remember=True)
-                    return redirect('/admin')
+            elif drone == '管理员登陆':
+                # 检查是否是管理员
+                is_admin = any(role.name == 'admin' for role in user_data.roles)
+                if is_admin:
+                    # 管理员登录
+                    login_user(user_data, remember=True)
+                    # 注意：通常管理员后台有单独的路由，比如 /admin
+                    # 这里暂时重定向到 /admin，如果不存在需要创建
+                    # 或者可以重定向到主页 url_for('index')
+                    # return redirect('/admin') # 假设存在/admin路由
+                    return redirect(url_for('index')) # 或者重定向到主页
                 else:
-                    # 如果用户无管理员权限，返回错误信息
-                    return render_template('login.html', error='用户无管理员权限')
+                    # 是普通用户，但尝试管理员登录
+                    return render_template('account/index.html', error='用户无管理员权限')
+            else:
+                # 未知的登录类型
+                return render_template('account/index.html', error='无效的登录类型')
+        else:
+            # 用户不存在或密码错误
+            return render_template('account/index.html', error='账号或密码错误')
 
 @app.route('/loginsout', methods=['GET'])
 def loginsout():
@@ -177,11 +203,23 @@ def signups():
         elif user == '' or password == '' or email == '':
             return render_template('account/register.html', error='输入不能为空')
         else:
-            new_user = user_datastore.create_user(username=user, email=email, password=password)
-            normal_role = user_datastore.find_role('User')
-            models.db.session.add(new_user)
+            # 创建用户
+            new_user = user_datastore.create_user(username=user, email=email, password=password, active=True) # 确保用户是激活状态
+            
+            # 查找或创建 'User' 角色
+            normal_role = user_datastore.find_or_create_role(name='User', description='普通用户')
+            
+            # # 将用户添加到 session (如果 find_or_create_role 没自动添加的话)
+            # # 通常 user_datastore 会处理 session 添加，但显式添加有时更安全
+            # db.session.add(new_user) 
+            
+            # 为用户分配角色
             user_datastore.add_role_to_user(new_user, normal_role)
-            models.db.session.commit()
+            
+            # 提交更改到数据库
+            db.session.commit()
+            
+            # 自动登录新注册的用户
             login_user(new_user, remember=True)
 
             return redirect(url_for('index'))
@@ -231,7 +269,7 @@ def predict():
         years = df['年份'].unique().tolist() if '年份' in df.columns else []
 
         return render_template('predict.html', regions=regions, departments=departments, positions=positions,
-                              educations=educations, majors=majors, years=years)
+                               educations=educations, majors=majors, years=years)
 
     elif request.method == 'POST':
         # 打印接收到的表单数据
@@ -265,19 +303,19 @@ def predict():
             # 加载LightGBM模型
             try:
                 # 加载pickle格式的LightGBM模型
-                model_path = 'lgb_model.pkl'
-                print(f"尝试加载LightGBM模型: {model_path}")
+                model_path = 'simple_model.pkl'
+                print(f"尝试加载模型: {model_path}")
                 
                 with open(model_path, 'rb') as f:
                     model_data = pickle.load(f)
                 
                 # 提取模型和元数据
-                lgb_model = model_data['model']
+                model = model_data['model']
                 encoders = model_data['encoders']
                 scaler = model_data['scaler']
                 features = model_data['features']
                 
-                print(f"成功加载LightGBM模型，特征数量: {len(features)}")
+                print(f"成功加载{model_data['model_name']}模型，特征数量: {len(features)}")
                 
                 # 准备预测数据
                 pred_data = pd.DataFrame({
@@ -296,7 +334,7 @@ def predict():
                 # 创建时间序列特征
                 if '年份' in pred_data.columns and not df.empty:
                     print("为预测数据创建时间序列特征")
-                    
+                
                     # 为预测数据构建时间序列特征
                     # 1. 从历史数据中获取该地区的时间序列数据
                     hist_data = df[df['地区'] == region].copy() if region else df.copy()
@@ -320,15 +358,19 @@ def predict():
                                         # 直接使用历史数据作为预测结果
                                         predicted_score = avg_score
                                         confidence = 0.95  # 高置信度，因为使用了实际历史数据
-                                        return render_template('predict.html', predicted_score=predicted_score, 
-                                                              confidence=confidence, train_score=round(confidence*100, 0),
-                                                              test_score=round(confidence*100 - 5, 0), 
-                                                              regions=regions, departments=departments, 
-                                                              positions=positions, educations=educations, 
-                                                              majors=majors, years=years)
+                                        
+                                        # 返回预测结果
+                                        return render_template('predict.html', 
+                                            predicted_score=predicted_score, 
+                                            confidence=confidence, 
+                                            train_score=round(confidence*100, 0),
+                                            test_score=round(confidence*100 - 5, 0), 
+                                            regions=regions, departments=departments, 
+                                            positions=positions, educations=educations, 
+                                            majors=majors, years=years)
                             except:
                                 print("年份格式转换失败，继续使用模型预测")
-                        
+            
                         # 为预测数据添加历史特征
                         # 1. 添加滞后特征
                         if region and '分数线' in hist_data.columns:
@@ -442,20 +484,21 @@ def predict():
                 # 标准化数值特征
                 X_pred_scaled = scaler.transform(X_pred)
                 
-                # 使用LightGBM模型预测
-                predicted_score = lgb_model.predict(X_pred_scaled)[0]
+                # 使用模型预测
+                predicted_score = model.predict(X_pred_scaled)[0]
                 
                 # 获取模型置信度
                 confidence = model_data['metrics']['confidence'] / 100  # 转换为0-1范围
+                print(confidence)
                 
                 # 四舍五入到2位小数
                 predicted_score = round(predicted_score, 2)
-                
-                print(f"LightGBM预测结果: {predicted_score}, 置信度: {confidence:.2f}")
+            
+                print(f"预测结果: {predicted_score}, 置信度: {confidence:.2f}")
                 
             except Exception as e:
                 import traceback
-                print(f"LightGBM模型预测失败: {e}")
+                print(f"模型预测失败: {e}")
                 print(traceback.format_exc())
                 
                 # 回退到使用平均值预测
@@ -474,7 +517,7 @@ def predict():
                     predicted_score += adjustment
                 
                 print(f"使用备选方法(平均值)预测: {predicted_score:.2f}，竞争比例调整: {adjustment:.2f}")
-            
+                
             # 返回预测结果
             return render_template('predict.html', predicted_score=predicted_score, 
                                   confidence=confidence, train_score=round(confidence*100, 0),
@@ -582,7 +625,7 @@ def prepare_visualization_data(df, keyword=None):
     region_application_num = region_application_num.sort_values(ascending=False)
     region_application_num_list = region_application_num.index.tolist()
     region_application_num_count = region_application_num.values.tolist()
-    
+
     return locals()
 
 @app.route('/visualization', methods=['GET'])
@@ -600,7 +643,7 @@ def visualization():
         
         # 准备可视化数据
         vis_data = prepare_visualization_data(df, keyword)
-        
+
         # 自定义zip过滤器
         def zip_filter(a, b):
             return zip(a, b)
