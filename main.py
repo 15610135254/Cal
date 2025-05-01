@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import jieba
 import pickle
+from functools import lru_cache
 
 # Flask相关导入
 from flask import Flask, request, render_template, jsonify, abort, session, redirect, url_for
@@ -26,15 +27,26 @@ from models import app, db
 user_datastore = SQLAlchemySessionUserDatastore(models.db.session, models.User, models.Role)
 security = Security(app, user_datastore)
 
-# 公共数据加载函数
+# 缓存过期时间（秒）
+CACHE_EXPIRY = 300  # 5分钟
+
+# 缓存数据结构
+_data_cache = {
+    'data': None,
+    'last_update': 0
+}
+
 def load_data_from_db(filter_condition=None):
     """
-    从数据库加载数据并进行预处理
-    参数:
-        filter_condition: 可选，用于过滤数据的条件函数
-    返回:
-        处理后的DataFrame
+    从数据库加载数据并进行预处理，支持缓存
     """
+    current_time = time.time()
+    
+    # 如果缓存有效且没有过滤条件，直接返回缓存的数据
+    if not filter_condition and _data_cache['data'] is not None:
+        if current_time - _data_cache['last_update'] < CACHE_EXPIRY:
+            return _data_cache['data']
+    
     try:
         # 使用pandas从数据库读取数据
         sql_command = 'select * from XinXi'
@@ -46,6 +58,10 @@ def load_data_from_db(filter_condition=None):
         # 应用过滤条件（如果有）
         if filter_condition is not None:
             df = df[filter_condition(df)]
+        else:
+            # 更新缓存
+            _data_cache['data'] = df
+            _data_cache['last_update'] = current_time
             
         return df
     except Exception as e:
@@ -535,9 +551,13 @@ def predict():
                                   positions=positions, educations=educations, 
                                   majors=majors, years=years)
 
-# 提取数据可视化公共函数
-def prepare_visualization_data(df, keyword=None):
-    """准备可视化数据"""
+# 使用lru_cache装饰器缓存预处理数据
+@lru_cache(maxsize=32)
+def prepare_visualization_data(keyword=None):
+    """准备可视化数据，支持缓存"""
+    # 加载数据
+    df = load_data_from_db()
+    
     # 模糊匹配地区、年份、职位、学历
     if keyword:
         df = df[df.apply(lambda row: any(keyword in str(row[col]) for col in ['地区', '年份', '职位', '学历']), axis=1)]
@@ -637,20 +657,21 @@ def visualization():
     if request.method == 'GET':
         # 获取关键词
         keyword = request.args.get('keyword', '')
-
-        # 加载数据
-        df = load_data_from_db()
         
-        # 准备可视化数据
-        vis_data = prepare_visualization_data(df, keyword)
-
-        # 自定义zip过滤器
-        def zip_filter(a, b):
-            return zip(a, b)
-
-        app.jinja_env.filters['zip'] = zip_filter
-
-        return render_template('visualization.html', **vis_data)
+        try:
+            # 准备可视化数据
+            vis_data = prepare_visualization_data(keyword)
+            
+            # 自定义zip过滤器
+            def zip_filter(a, b):
+                return zip(a, b)
+            
+            app.jinja_env.filters['zip'] = zip_filter
+            
+            return render_template('visualization.html', **vis_data)
+        except Exception as e:
+            print(f"可视化数据处理错误: {e}")
+            return render_template('visualization.html', error="数据加载失败")
 
 # API端点
 @app.route('/api/get_departments', methods=['GET'])
