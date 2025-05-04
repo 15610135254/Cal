@@ -128,20 +128,46 @@ class ShuJu(db.Model):
 
 
 if __name__ == '__main__':
+    print("正在检查并初始化数据库角色和默认管理员...")
     with app.app_context():
-        db.drop_all()  # 清除表
-        db.create_all()  # 创建表
+        # 仅创建尚不存在的表
+        db.create_all()
 
-        # 设置flask-security
+        # 设置Flask-Security (需要在 app_context 内)
         user_datastore = SQLAlchemySessionUserDatastore(db.session, User, Role)
-        security = Security(app, user_datastore)
-        user_datastore.create_role(name='admin', description='管理员')  # 注册管理员权限
-        user_datastore.create_role(name='User', description='普通用户')  # 注册用户权限
+        # security = Security(app, user_datastore) # Security 实例通常在主应用创建
+
+        # 确保 'admin' 和 'User' 角色存在
+        admin_role = user_datastore.find_or_create_role(name='admin', description='管理员')
+        user_role = user_datastore.find_or_create_role(name='User', description='普通用户')
+        
+        # 查找或创建 admin 用户
+        admin_username = 'admin'
+        admin_password = 'admin123'
+        admin_email = 'admin@example.com'
+        
+        admin_user = user_datastore.find_user(username=admin_username)
+        
+        if not admin_user:
+            print(f"正在创建管理员用户 '{admin_username}'...")
+            admin_user = user_datastore.create_user(
+                username=admin_username, 
+                password=admin_password, 
+                email=admin_email,
+                active=True
+            )
+            # 为新创建的 admin 用户添加 admin 角色
+            user_datastore.add_role_to_user(admin_user, admin_role)
+            print(f"管理员用户 '{admin_username}' 创建成功。")
+        else:
+            print(f"管理员用户 '{admin_username}' 已存在。")
+            # 可选：如果需要，可以在这里更新现有 admin 用户的密码或角色
+            # admin_user.password = user_datastore.hash_password(admin_password) # 如果要更新密码
+            # if admin_role not in admin_user.roles:
+            #     user_datastore.add_role_to_user(admin_user, admin_role)
+            #     print(f"已为现有用户 '{admin_username}' 添加 'admin' 角色。")
+
+        # 提交所有更改
         db.session.commit()
-        new_user = user_datastore.create_user(username='admin', password='root123456', email='123@qq.com',
-                                          active=True)  # 注册管理员
-        normal_role = user_datastore.find_role('admin')
-        db.session.add(new_user)
-        user_datastore.add_role_to_user(new_user, normal_role)
-    db.session.commit()
+        print("数据库检查与初始化完成。")
 
