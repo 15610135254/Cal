@@ -7,7 +7,7 @@ from flask_babelex import Babel
 from flask_security import Security, SQLAlchemySessionUserDatastore, \
     UserMixin, RoleMixin, login_required, auth_token_required, http_auth_required
 
-# 修改为直接导入 Flask 
+# 修改为直接导入 Flask
 from flask import Flask
 
 # 修改应用创建方式
@@ -26,6 +26,7 @@ host = '127.0.0.1'
 user = 'root'
 password = ''  # 无密码
 database = 'xinxi'
+# 不使用密码连接
 app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://%s:%s@%s:3306/%s" % (user, password, host, database)
 
 # 安全配置
@@ -71,7 +72,7 @@ class User(db.Model, UserMixin):
 
     def __repr__(self):
         return "<{} 用户>".format(self.username)
-        
+
     def verify_password(self, password):
         """验证用户密码是否正确"""
         return self.password == password
@@ -113,7 +114,7 @@ class ShuJu(db.Model):
     最高进面分 = db.Column(db.String(124))
     职位代码 = db.Column(db.String(124))
     招考人数 = db.Column(db.String(124))
-    职位资格条件和要求 = db.Column(db.String(124))
+    职位资格条件和要求 = db.Column(db.Text)  # 修改为Text类型，不限制长度
     专业 = db.Column(db.String(124))
     学历 = db.Column(db.String(124))
     学位 = db.Column(db.String(124))
@@ -121,7 +122,7 @@ class ShuJu(db.Model):
     经历要求 = db.Column(db.String(124))
     其他 = db.Column(db.String(124))
     申论类别 = db.Column(db.String(124))
-    专业科目 = db.Column(db.String(124))
+    专业科目 = db.Column(db.Text)  # 修改为Text类型，不限制长度
     咨询电话 = db.Column(db.String(124))
 
 
@@ -140,19 +141,19 @@ if __name__ == '__main__':
         # 确保 'admin' 和 'User' 角色存在
         admin_role = user_datastore.find_or_create_role(name='admin', description='管理员')
         user_role = user_datastore.find_or_create_role(name='User', description='普通用户')
-        
+
         # 查找或创建 admin 用户
         admin_username = 'admin'
         admin_password = 'admin123'
         admin_email = 'admin@example.com'
-        
+
         admin_user = user_datastore.find_user(username=admin_username)
-        
+
         if not admin_user:
             print(f"正在创建管理员用户 '{admin_username}'...")
             admin_user = user_datastore.create_user(
-                username=admin_username, 
-                password=admin_password, 
+                username=admin_username,
+                password=admin_password,
                 email=admin_email,
                 active=True
             )

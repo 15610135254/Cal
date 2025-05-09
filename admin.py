@@ -1,5 +1,5 @@
 from flask_admin import Admin,AdminIndexView
-from main import app
+from models import app
 from flask_admin.contrib.sqla import ModelView
 from flask import current_app,redirect,url_for,request
 from models import db,User, Role, RolesUsers,XinXi,ShuJu

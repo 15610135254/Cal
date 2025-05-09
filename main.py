@@ -22,6 +22,8 @@ from sqlalchemy import or_, and_
 # 本地模块导入
 import models
 from models import app, db
+# 导入admin模块，确保管理后台路由被正确注册
+import admin
 
 # 设置Flask-Security
 user_datastore = SQLAlchemySessionUserDatastore(models.db.session, models.User, models.Role)
@@ -41,20 +43,20 @@ def load_data_from_db(filter_condition=None):
     从数据库加载数据并进行预处理，支持缓存
     """
     current_time = time.time()
-    
+
     # 如果缓存有效且没有过滤条件，直接返回缓存的数据
     if not filter_condition and _data_cache['data'] is not None:
         if current_time - _data_cache['last_update'] < CACHE_EXPIRY:
             return _data_cache['data']
-    
+
     try:
         # 使用pandas从数据库读取数据
         sql_command = 'select * from XinXi'
         df = pd.read_sql(sql_command, models.db.engine)
-        
+
         # 去除包含NaN的行
         df.dropna(inplace=True)
-        
+
         # 应用过滤条件（如果有）
         if filter_condition is not None:
             df = df[filter_condition(df)]
@@ -62,7 +64,7 @@ def load_data_from_db(filter_condition=None):
             # 更新缓存
             _data_cache['data'] = df
             _data_cache['last_update'] = current_time
-            
+
         return df
     except Exception as e:
         print(f"数据加载错误: {e}")
@@ -88,6 +90,25 @@ def index():  # 主页
         )
         results = pagination.items
         return render_template('index.html', results=results, pagination=pagination)
+
+@app.route('/ruweidata', methods=['GET'])
+def ruweidata():  # 入围数据页面
+    uuid = current_user.is_anonymous
+    if uuid:
+        return redirect(url_for('logins'))
+    if request.method == 'GET':
+        # 获取页码参数，默认为第1页
+        page = request.args.get('page', 1, type=int)
+        # 每页显示50条记录
+        per_page = 50
+        # 使用paginate进行分页
+        pagination = models.ShuJu.query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        results = pagination.items
+        return render_template('ruweidata.html', results=results, pagination=pagination)
 
 @app.route('/keshihua', methods=['GET', 'POST'])
 def keshihua():  # 可视化页面
@@ -150,7 +171,7 @@ def keshihua():  # 可视化页面
         title2_count = []
         for resu in li1:
             title2_list.append(resu[0])
-            title2_count.append(resu[1])
+            title2_count.append(float(resu[1]))
 
         return render_template('daping/index.html', **locals())
 
@@ -182,11 +203,8 @@ def logins():
                 if is_admin:
                     # 管理员登录
                     login_user(user_data, remember=True)
-                    # 注意：通常管理员后台有单独的路由，比如 /admin
-                    # 这里暂时重定向到 /admin，如果不存在需要创建
-                    # 或者可以重定向到主页 url_for('index')
-                    # return redirect('/admin') # 假设存在/admin路由
-                    return redirect(url_for('index')) # 或者重定向到主页
+                    # 管理员用户登录成功后重定向到/admin
+                    return redirect('/admin')
                 else:
                     # 是普通用户，但尝试管理员登录
                     return render_template('account/index.html', error='用户无管理员权限')
@@ -221,20 +239,20 @@ def signups():
         else:
             # 创建用户
             new_user = user_datastore.create_user(username=user, email=email, password=password, active=True) # 确保用户是激活状态
-            
+
             # 查找或创建 'User' 角色
             normal_role = user_datastore.find_or_create_role(name='User', description='普通用户')
-            
+
             # # 将用户添加到 session (如果 find_or_create_role 没自动添加的话)
             # # 通常 user_datastore 会处理 session 添加，但显式添加有时更安全
-            # db.session.add(new_user) 
-            
+            # db.session.add(new_user)
+
             # 为用户分配角色
             user_datastore.add_role_to_user(new_user, normal_role)
-            
+
             # 提交更改到数据库
             db.session.commit()
-            
+
             # 自动登录新注册的用户
             login_user(new_user, remember=True)
 
@@ -334,7 +352,7 @@ def predict():
             recruitment_num = float(request.form.get('recruitment_num'))
             application_num = float(request.form.get('application_num'))
             year = request.form.get('year') if '年份' in df.columns and request.form.get('year') else None
-            
+
             print(f"接收到的特征值: region={region}, department={department}, position={position}, education={education}, major={major}, recruitment_num={recruitment_num}, application_num={application_num}, year={year}")
 
             # 加载LightGBM模型
@@ -450,11 +468,11 @@ def predict():
                                 pred_data['分数线_滞后2年'] = region_scores.iloc[-2] if len(region_scores) >= 2 else region_scores.mean()
                                 # 滞后3年
                                 pred_data['分数线_滞后3年'] = region_scores.iloc[-3] if len(region_scores) >= 3 else region_scores.mean()
-                                
+
                                 # 计算历史平均值和变化
                                 last_3_scores = region_scores.iloc[-3:] if len(region_scores) >= 3 else region_scores
                                 last_5_scores = region_scores.iloc[-5:] if len(region_scores) >= 5 else region_scores
-                                
+
                                 # 3年均值
                                 pred_data['分数线_3年均值'] = last_3_scores.mean()
                                 # 5年均值
@@ -465,7 +483,7 @@ def predict():
                                 pred_data['分数线_3年最大值'] = last_3_scores.max()
                                 # 3年最小值
                                 pred_data['分数线_3年最小值'] = last_3_scores.min()
-                                
+
                                 # 年度变化
                                 if len(region_scores) >= 2:
                                     pred_data['分数线_年度变化'] = region_scores.iloc[-1] - region_scores.iloc[-2]
@@ -474,7 +492,7 @@ def predict():
                                 else:
                                     pred_data['分数线_年度变化'] = 0
                                     pred_data['分数线_年度变化率'] = 0
-                                
+
                                 # 年度加速度 (变化的变化)
                                 if len(region_scores) >= 3:
                                     change1 = region_scores.iloc[-1] - region_scores.iloc[-2]
@@ -482,7 +500,7 @@ def predict():
                                     pred_data['分数线_年度加速度'] = change1 - change2
                                 else:
                                     pred_data['分数线_年度加速度'] = 0
-                    
+
                     # 报考人数相关特征
                     if '报考人数' in hist_data.columns and region:
                         region_applicants = hist_data[hist_data['地区'] == region]['报考人数']
@@ -490,7 +508,7 @@ def predict():
                             # 3年平均报考人数
                             last_3_applicants = region_applicants.iloc[-3:] if len(region_applicants) >= 3 else region_applicants
                             pred_data['报考人数_3年均值'] = last_3_applicants.mean()
-                            
+
                             # 报考人数年度变化
                             if len(region_applicants) >= 2:
                                 pred_data['报考人数_年度变化'] = region_applicants.iloc[-1] - region_applicants.iloc[-2]
@@ -498,7 +516,7 @@ def predict():
                             else:
                                 pred_data['报考人数_年度变化'] = 0
                                 pred_data['报考人数_年度变化率'] = 0
-                    
+
                     # 竞争比相关特征
                     if '报考人数' in hist_data.columns and '招考人数' in hist_data.columns and region:
                         region_data = hist_data[hist_data['地区'] == region]
@@ -506,20 +524,20 @@ def predict():
                             # 计算历史竞争比
                             region_data['竞争比'] = region_data['报考人数'] / region_data['招考人数'].replace(0, 1)
                             competition_ratios = region_data['竞争比']
-                            
+
                             # 当前竞争比
                             pred_data['竞争比'] = application_num / max(1, recruitment_num)
-                            
+
                             # 3年平均竞争比
                             last_3_ratios = competition_ratios.iloc[-3:] if len(competition_ratios) >= 3 else competition_ratios
                             pred_data['竞争比_3年均值'] = last_3_ratios.mean()
-                            
+
                             # 竞争比年度变化
                             if len(competition_ratios) >= 2:
                                 pred_data['竞争比_年度变化'] = competition_ratios.iloc[-1] - competition_ratios.iloc[-2]
                             else:
                                 pred_data['竞争比_年度变化'] = 0
-                
+
                 # 特征编码
                 for col, encoder in encoders.items():
                     if col in pred_data.columns:
@@ -544,7 +562,7 @@ def predict():
                             print(f"编码特征 {col} 时出错: {e}")
                             # 使用0作为默认编码
                             pred_data[col+'_encoded'] = 0
-                
+
                 # 检查所有必需的特征是否存在
                 missing_features = [f for f in features if f not in pred_data.columns]
                 if missing_features:
@@ -552,13 +570,13 @@ def predict():
                     # 为缺失的特征填充0值
                     for feature in missing_features:
                         pred_data[feature] = 0
-                
+
                 # 准备输入特征向量
                 X_pred = pred_data[features]
-                
+
                 # 标准化数值特征
                 X_pred_scaled = scaler.transform(X_pred)
-                
+
                 # 使用模型预测
                 predicted_score_raw = model.predict(X_pred_scaled)[0]
 
@@ -592,8 +610,8 @@ def predict():
                     # 竞争更激烈，分数线可能更高
                     adjustment = min(5, (competition_ratio/avg_competition - 1) * 10)
                     if isinstance(predicted_score, (int, float)): # 确保 predicted_score 是数字
-                         predicted_score += adjustment
-                         predicted_score = round(predicted_score, 2) # 调整后再次四舍五入
+                        predicted_score += adjustment
+                        predicted_score = round(predicted_score, 2) # 调整后再次四舍五入
 
                 print(f"使用备选方法(平均值)预测: {predicted_score}，竞争比例调整: {adjustment:.2f}")
 
@@ -628,7 +646,7 @@ def prepare_visualization_data(keyword=None):
     """准备可视化数据，支持缓存"""
     # 加载数据
     df = load_data_from_db()
-    
+
     # 模糊匹配地区、年份、职位、学历
     if keyword:
         df = df[df.apply(lambda row: any(keyword in str(row[col]) for col in ['地区', '年份', '职位', '学历']), axis=1)]
@@ -683,7 +701,7 @@ def prepare_visualization_data(keyword=None):
     title2_count = []
     for resu in li1:
         title2_list.append(resu[0])
-        title2_count.append(resu[1])
+        title2_count.append(float(resu[1]))
 
     # 6. 各地区平均分数线
     region_avg_score = df['分数线'].groupby(df['地区']).mean()
@@ -724,21 +742,21 @@ def visualization():
     uuid = current_user.is_anonymous
     if uuid:
         return redirect(url_for('logins'))
-    
+
     if request.method == 'GET':
         # 获取关键词
         keyword = request.args.get('keyword', '')
-        
+
         try:
             # 准备可视化数据
             vis_data = prepare_visualization_data(keyword)
-            
+
             # 自定义zip过滤器
             def zip_filter(a, b):
                 return zip(a, b)
-            
+
             app.jinja_env.filters['zip'] = zip_filter
-            
+
             return render_template('visualization.html', **vis_data)
         except Exception as e:
             print(f"可视化数据处理错误: {e}")
@@ -751,14 +769,14 @@ def get_departments():
     region = request.args.get('region', '')
     if not region:
         return jsonify([])
-    
+
     # 加载数据
     df = load_data_from_db()
-    
+
     # 过滤特定地区
     filtered_df = df[df['地区'] == region]
     departments = filtered_df['部门名称'].unique().tolist()
-    
+
     return jsonify(departments)
 
 @app.route('/api/get_positions', methods=['GET'])
@@ -768,14 +786,14 @@ def get_positions():
     department = request.args.get('department', '')
     if not region or not department:
         return jsonify([])
-    
+
     # 加载数据
     df = load_data_from_db()
-    
+
     # 过滤特定地区和部门
     filtered_df = df[(df['地区'] == region) & (df['部门名称'] == department)]
     positions = filtered_df['职位'].unique().tolist()
-    
+
     return jsonify(positions)
 
 @app.route('/api/get_majors', methods=['GET'])
@@ -786,16 +804,16 @@ def get_majors():
     position = request.args.get('position', '')
     if not region or not department or not position:
         return jsonify([])
-    
+
     # 加载数据
     df = load_data_from_db()
-    
+
     # 过滤特定地区、部门和职位
-    filtered_df = df[(df['地区'] == region) & 
-                    (df['部门名称'] == department) & 
+    filtered_df = df[(df['地区'] == region) &
+                    (df['部门名称'] == department) &
                     (df['职位'] == position)]
     majors = filtered_df['专业'].unique().tolist()
-    
+
     return jsonify(majors)
 
 if __name__ == '__main__':
