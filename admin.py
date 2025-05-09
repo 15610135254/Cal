@@ -18,13 +18,18 @@ class MyModelView(ModelView):
         # redirect to login page if user doesn't have access
         return redirect(url_for('index'))
 
-class MyUser(MyModelView):
-    column_labels = dict(
-        username='账号',
-        email='邮箱',
-        password='密码'
-    )
-    column_searchable_list = ['username']
+# 为 User 创建特定的 Admin View
+class UserAdminView(MyModelView): # 继承自 MyModelView 以保持权限控制
+    form_columns = ['username', 'email', 'password', 'active']
+
+# 为 Role 创建特定的 Admin View
+class RoleAdminView(MyModelView): # 继承自 MyModelView 以保持权限控制
+    form_columns = ['name'] # 之前测试到这里仍然报错
+    form_widget_args = {
+        'name': {
+            'flags': {} # 显式提供一个空的 flags 字典
+        }
+    }
 
 class MyItem(MyModelView):
     column_searchable_list = ['地区', '部门名称', '职位', '学历', '专业']
@@ -40,8 +45,8 @@ admin = Admin(app=app, name='后台管理系统',template_mode='bootstrap3', bas
 
 admin.add_view(MyItem(XinXi, db.session,name='进面数据管理'))
 admin.add_view(MyShuJu(ShuJu, db.session,name='入围数据管理'))
-admin.add_view(MyUser(User, db.session,name='用户管理'))
-admin.add_view(MyModelView(Role, db.session,name='用户权限管理'))
+admin.add_view(UserAdminView(User, db.session,name='用户管理'))
+admin.add_view(RoleAdminView(Role, db.session,name='用户权限管理'))
 
 if __name__ == '__main__':
     app.run(debug=True)
