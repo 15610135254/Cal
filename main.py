@@ -1,74 +1,59 @@
-# !/usr/bin/env python
-# _*_ coding: utf-8 _*_
-# 标准库导入
 import os
 import time
-import datetime
-
-# 第三方库导入
 import numpy as np
 import pandas as pd
 import jieba
 import pickle
 from functools import lru_cache
+from flask import (
+    Flask, request, render_template, jsonify, 
+    abort, session, redirect, url_for
+)
+from flask_security import (
+    Security, SQLAlchemySessionUserDatastore,
+    login_required, current_user, login_user, logout_user
+)
 
-# Flask相关导入
-from flask import Flask, request, render_template, jsonify, abort, session, redirect, url_for
-from flask_security import Security, SQLAlchemySessionUserDatastore, \
-    UserMixin, RoleMixin, login_required, auth_token_required, http_auth_required, current_user
-from flask_security.utils import login_user, logout_user
-from sqlalchemy import or_, and_
-
-# 本地模块导入
 import models
 from models import app, db
-# 导入admin模块，确保管理后台路由被正确注册
 import admin
 
-# 设置Flask-Security
+# 初始化Flask-Security
 user_datastore = SQLAlchemySessionUserDatastore(models.db.session, models.User, models.Role)
 security = Security(app, user_datastore)
 
-# 缓存过期时间（秒）
-CACHE_EXPIRY = 300  # 5分钟
+CACHE_EXPIRY = 300  # 缓存过期时间（秒）
 
-# 缓存数据结构
 _data_cache = {
     'data': None,
     'last_update': 0
 }
 
 def load_data_from_db(filter_condition=None):
-    """
-    从数据库加载数据并进行预处理，支持缓存
-    """
     current_time = time.time()
 
-    # 如果缓存有效且没有过滤条件，直接返回缓存的数据
     if not filter_condition and _data_cache['data'] is not None:
         if current_time - _data_cache['last_update'] < CACHE_EXPIRY:
             return _data_cache['data']
 
     try:
-        # 使用pandas从数据库读取数据
         sql_command = 'select * from XinXi'
         df = pd.read_sql(sql_command, models.db.engine)
-
-        # 去除包含NaN的行
         df.dropna(inplace=True)
 
-        # 应用过滤条件（如果有）
         if filter_condition is not None:
             df = df[filter_condition(df)]
         else:
-            # 更新缓存
             _data_cache['data'] = df
             _data_cache['last_update'] = current_time
 
         return df
     except Exception as e:
         print(f"数据加载错误: {e}")
-        return pd.DataFrame()  # 返回空DataFrame
+        return pd.DataFrame()
+
+def check_keyword_match(row, keyword, columns):
+    return any(keyword in str(row[col]) for col in columns)
 
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
@@ -306,9 +291,6 @@ def predict():
                                educations=educations, majors=majors, years=years)
 
     elif request.method == 'POST':
-        # 打印接收到的表单数据
-        print("\n\n==================== 接收到表单数据 ====================")
-        print("表单数据:", request.form)
 
         # 初始化传递给模板的指标变量
         predicted_score = "N/A"
@@ -353,13 +335,12 @@ def predict():
             application_num = float(request.form.get('application_num'))
             year = request.form.get('year') if '年份' in df.columns and request.form.get('year') else None
 
-            print(f"接收到的特征值: region={region}, department={department}, position={position}, education={education}, major={major}, recruitment_num={recruitment_num}, application_num={application_num}, year={year}")
+
 
             # 加载LightGBM模型
             try:
                 # 加载pickle格式的LightGBM模型
                 model_path = 'simple_model.pkl'
-                print(f"尝试加载模型: {model_path}")
 
                 with open(model_path, 'rb') as f:
                     model_data = pickle.load(f)
@@ -369,10 +350,7 @@ def predict():
                 encoders = model_data['encoders']
                 scaler = model_data['scaler']
                 features = model_data['features']
-                metrics = model_data.get('metrics', {}) # 获取 metrics 字典，不存在则为空字典
-
-                print(f"成功加载{model_data.get('model_name', '未知')}模型，特征数量: {len(features)}")
-                print(f"从模型文件读取的 Metrics: {metrics}")
+                metrics = model_data.get('metrics', {})
 
                 # --- 直接从 metrics 获取用于显示的指标 (修改后) ---
                 raw_confidence = metrics.get('confidence', None)
@@ -433,7 +411,7 @@ def predict():
                                     year_data = hist_data[hist_data['年份'] == year]
                                     if len(year_data) > 0:
                                         avg_score = year_data['分数线'].mean()
-                                        print(f"从历史数据找到年份 {year} 的平均分数线: {avg_score:.2f}")
+
                                         # 直接使用历史数据作为预测结果
                                         predicted_score = avg_score
                                         # 使用模型文件中的置信度或其他指标
@@ -548,7 +526,7 @@ def predict():
                                 pred_data[col+'_encoded'] = encoder.transform(pred_data[col])
                             else:
                                 # 如果是未见过的类别，使用最常见的类别
-                                print(f"警告: 特征 {col} 的值 '{pred_data[col].iloc[0]}' 在训练数据中不存在，使用最常见值")
+
                                 # 查找最常见值的编码，如果没有，用0
                                 common_value_encoded = 0
                                 if len(encoder.classes_) > 0:
@@ -559,14 +537,14 @@ def predict():
                                         pass
                                 pred_data[col+'_encoded'] = common_value_encoded
                         except Exception as e:
-                            print(f"编码特征 {col} 时出错: {e}")
+
                             # 使用0作为默认编码
                             pred_data[col+'_encoded'] = 0
 
                 # 检查所有必需的特征是否存在
                 missing_features = [f for f in features if f not in pred_data.columns]
                 if missing_features:
-                    print(f"警告: 缺失以下特征: {missing_features}")
+
                     # 为缺失的特征填充0值
                     for feature in missing_features:
                         pred_data[feature] = 0
@@ -583,14 +561,12 @@ def predict():
                 # 四舍五入到2位小数
                 predicted_score = round(predicted_score_raw, 2)
 
-                print(f"预测分数线: {predicted_score}")
-                print(f"用于显示的指标: Confidence={display_confidence}, Train Score={display_train_score}, Test Score={display_test_score}")
+
 
 
             except Exception as e:
                 import traceback
-                print(f"模型预测失败: {e}")
-                print(traceback.format_exc())
+
                 error_message = f"模型预测失败: {e}"
 
                 # 回退到使用平均值预测 (更新显示的指标以满足条件)
@@ -613,7 +589,7 @@ def predict():
                         predicted_score += adjustment
                         predicted_score = round(predicted_score, 2) # 调整后再次四舍五入
 
-                print(f"使用备选方法(平均值)预测: {predicted_score}，竞争比例调整: {adjustment:.2f}")
+
 
             # 返回预测结果 (更新传递给模板的变量)
             return render_template('predict.html',
@@ -627,8 +603,7 @@ def predict():
 
         except Exception as e:
             import traceback
-            print(f"预测处理错误: {str(e)}")
-            print(traceback.format_exc())
+
             error_message = f"预测处理错误: {str(e)}"
             # 确保即使顶层 try 块出错，也能渲染页面
             return render_template('predict.html', error=error_message,
@@ -643,95 +618,76 @@ def predict():
 # 使用lru_cache装饰器缓存预处理数据
 @lru_cache(maxsize=32)
 def prepare_visualization_data(keyword=None):
-    """准备可视化数据，支持缓存"""
-    # 加载数据
     df = load_data_from_db()
 
-    # 模糊匹配地区、年份、职位、学历
     if keyword:
-        df = df[df.apply(lambda row: any(keyword in str(row[col]) for col in ['地区', '年份', '职位', '学历']), axis=1)]
+        search_columns = ['地区', '年份', '职位', '学历']
+        df = df[df.apply(lambda row: check_keyword_match(row, keyword, search_columns), axis=1)]
 
-    # 1. 各专业平均分数线
+    # 各专业平均分数线
     dys = df['分数线'].groupby(df['专业']).mean().head(20)
-    fuzhuang_xiaoshou = []
-    for i in range(len(dys.values.tolist())):
-        fuzhuang_xiaoshou.append({"name": list(dys.index)[i], "value": round(dys.values.tolist()[i], 10)})
+    fuzhuang_xiaoshou = [
+        {"name": list(dys.index)[i], "value": round(dys.values.tolist()[i], 10)}
+        for i in range(len(dys.values.tolist()))
+    ]
 
-    # 2. 各专业报考人数
-    fuzhuang_type2 = {key: value for key, value in df['报考人数'].groupby(df['专业']).mean().items()}
-    fuzhuang_type2 = sorted(fuzhuang_type2.items(), key=lambda x: x[1], reverse=True)
-    type2_name = []
-    type2_count = []
-    for resu in fuzhuang_type2[:10]:
-        type2_name.append(resu[0])
-        type2_count.append(round(resu[1]))
+    # 各专业报考人数
+    fuzhuang_type2 = df['报考人数'].groupby(df['专业']).mean()
+    fuzhuang_type2 = sorted(fuzhuang_type2.items(), key=lambda x: x[1], reverse=True)[:10]
+    type2_name = [x[0] for x in fuzhuang_type2]
+    type2_count = [round(x[1]) for x in fuzhuang_type2]
 
-    # 3. 各专业招考人数
-    fuzhuang_pinbai = {key: round(value, 2) for key, value in df['招考人数'].groupby(df['专业']).mean().items()}
-    fuzhuang_pinbai = sorted(fuzhuang_pinbai.items(), key=lambda x: x[1], reverse=True)
-    num_name = []
-    num_count = []
-    for resu in fuzhuang_pinbai[:10]:
-        num_name.append(resu[0])
-        num_count.append(resu[1])
+    # 各专业招考人数
+    fuzhuang_pinbai = df['招考人数'].groupby(df['专业']).mean()
+    fuzhuang_pinbai = {k: round(v, 2) for k, v in fuzhuang_pinbai.items()}
+    fuzhuang_pinbai = sorted(fuzhuang_pinbai.items(), key=lambda x: x[1], reverse=True)[:10]
+    num_name = [x[0] for x in fuzhuang_pinbai]
+    num_count = [x[1] for x in fuzhuang_pinbai]
 
-    # 4. 词云图
-    a = [da1[0] for da1 in df[['专业']].values.tolist()[:100]]
-    b = ' '.join(a)
-    c = jieba.lcut(b)
-    values = []
-    for key in c:
-        if key.strip():
-            values.append(key.strip())
-    list11 = list(set(values))
-    title_count1 = []
-    for resu1 in list11:
-        title_count1.append({"name": resu1, "value": values.count(resu1)})
-    title_count1.sort(key=lambda xx: xx['value'], reverse=True)
+    # 词云数据
+    majors = [x[0] for x in df[['专业']].values.tolist()[:100]]
+    words = jieba.lcut(' '.join(majors))
+    word_counts = {}
+    for word in words:
+        if word.strip():
+            word_counts[word.strip()] = word_counts.get(word.strip(), 0) + 1
+    title_count1 = [{"name": k, "value": v} for k, v in word_counts.items()]
+    title_count1.sort(key=lambda x: x['value'], reverse=True)
     title_count1 = title_count1[:100]
 
-    # 5. 各地区招考人数
-    datas11 = [i[0] for i in df[['地区']].values.tolist()]
-    type1s = list(set(datas11))
-    type1s.sort()
-    li1 = []
-    for type1 in type1s:
-        li1.append((type1, df[df['地区'] == type1]['招考人数'].sum()))
-    title2_list = []
-    title2_count = []
-    for resu in li1:
-        title2_list.append(resu[0])
-        title2_count.append(float(resu[1]))
+    # 地区数据统计
+    region_data = df.groupby('地区').agg({
+        '招考人数': 'sum',
+        '分数线': 'mean',
+        '报考人数': 'sum'
+    }).sort_index()
 
-    # 6. 各地区平均分数线
-    region_avg_score = df['分数线'].groupby(df['地区']).mean()
-    region_avg_score = region_avg_score.sort_values(ascending=False)
+    title2_list = region_data.index.tolist()
+    title2_count = region_data['招考人数'].tolist()
+
+    # 各地区平均分数线
+    region_avg_score = region_data['分数线'].sort_values(ascending=False)
     region_avg_score_list = region_avg_score.index.tolist()
     region_avg_score_count = region_avg_score.values.tolist()
 
-    # 7. 各学历平均分数线
-    education_avg_score = df['分数线'].groupby(df['学历']).mean()
-    education_avg_score = education_avg_score.sort_values(ascending=False)
+    # 各学历平均分数线
+    education_avg_score = df.groupby('学历')['分数线'].mean().sort_values(ascending=False)
     education_avg_score_list = education_avg_score.index.tolist()
     education_avg_score_count = education_avg_score.values.tolist()
 
-    # 8. 各职位平均分数线
-    position_avg_score = df['分数线'].groupby(df['职位']).mean()
-    # 过滤掉可能的0值或异常值
-    position_avg_score = position_avg_score[position_avg_score > 0]
-    position_avg_score = position_avg_score.sort_values(ascending=False)
+    # 各职位平均分数线
+    position_avg_score = df.groupby('职位')['分数线'].mean()
+    position_avg_score = position_avg_score[position_avg_score > 0].sort_values(ascending=False)
     position_avg_score_list = position_avg_score.index.tolist()
     position_avg_score_count = position_avg_score.values.tolist()
 
-    # 9. 各专业最高分
-    major_max_score = df['最高分'].groupby(df['专业']).max()
-    major_max_score = major_max_score.sort_values(ascending=False)
+    # 各专业最高分
+    major_max_score = df.groupby('专业')['最高分'].max().sort_values(ascending=False)
     major_max_score_list = major_max_score.index.tolist()
     major_max_score_count = major_max_score.values.tolist()
 
-    # 10. 各地区报考人数
-    region_application_num = df['报考人数'].groupby(df['地区']).sum()
-    region_application_num = region_application_num.sort_values(ascending=False)
+    # 各地区报考人数
+    region_application_num = region_data['报考人数'].sort_values(ascending=False)
     region_application_num_list = region_application_num.index.tolist()
     region_application_num_count = region_application_num.values.tolist()
 
@@ -744,14 +700,11 @@ def visualization():
         return redirect(url_for('logins'))
 
     if request.method == 'GET':
-        # 获取关键词
         keyword = request.args.get('keyword', '')
 
         try:
-            # 准备可视化数据
             vis_data = prepare_visualization_data(keyword)
 
-            # 自定义zip过滤器
             def zip_filter(a, b):
                 return zip(a, b)
 
@@ -759,62 +712,48 @@ def visualization():
 
             return render_template('visualization.html', **vis_data)
         except Exception as e:
-            print(f"可视化数据处理错误: {e}")
             return render_template('visualization.html', error="数据加载失败")
 
 # API端点
 @app.route('/api/get_departments', methods=['GET'])
 def get_departments():
-    """根据地区获取部门列表"""
     region = request.args.get('region', '')
     if not region:
         return jsonify([])
 
-    # 加载数据
     df = load_data_from_db()
-
-    # 过滤特定地区
-    filtered_df = df[df['地区'] == region]
-    departments = filtered_df['部门名称'].unique().tolist()
-
+    departments = df[df['地区'] == region]['部门名称'].unique().tolist()
     return jsonify(departments)
 
 @app.route('/api/get_positions', methods=['GET'])
 def get_positions():
-    """根据地区和部门获取职位列表"""
     region = request.args.get('region', '')
     department = request.args.get('department', '')
     if not region or not department:
         return jsonify([])
 
-    # 加载数据
     df = load_data_from_db()
-
-    # 过滤特定地区和部门
-    filtered_df = df[(df['地区'] == region) & (df['部门名称'] == department)]
-    positions = filtered_df['职位'].unique().tolist()
-
+    positions = df[
+        (df['地区'] == region) & 
+        (df['部门名称'] == department)
+    ]['职位'].unique().tolist()
     return jsonify(positions)
 
 @app.route('/api/get_majors', methods=['GET'])
 def get_majors():
-    """根据地区、部门和职位获取专业列表"""
     region = request.args.get('region', '')
     department = request.args.get('department', '')
     position = request.args.get('position', '')
     if not region or not department or not position:
         return jsonify([])
 
-    # 加载数据
     df = load_data_from_db()
-
-    # 过滤特定地区、部门和职位
-    filtered_df = df[(df['地区'] == region) &
-                    (df['部门名称'] == department) &
-                    (df['职位'] == position)]
-    majors = filtered_df['专业'].unique().tolist()
-
+    majors = df[
+        (df['地区'] == region) &
+        (df['部门名称'] == department) &
+        (df['职位'] == position)
+    ]['专业'].unique().tolist()
     return jsonify(majors)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app.run(debug=True, host='0.0.0.0', port=8000)

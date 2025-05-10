@@ -1,11 +1,9 @@
 import models
 from models import app
-import datetime
 import os
 import pandas
 import numpy as np
 
-# 设置pandas显示选项，以便更好地查看数据
 pandas.set_option('display.max_columns', None)
 pandas.set_option('display.width', 1000)
 

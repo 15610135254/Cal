@@ -1,6 +1,5 @@
 import pandas
 import models
-import datetime
 import os
 
 list1 = os.listdir('2020-2022安徽省考入围分数统计/2023安徽省考进面分数/')
@@ -8,10 +7,8 @@ print(list1)
 
 for row in list1:
     df = pandas.read_excel("2020-2022安徽省考入围分数统计/2023安徽省考进面分数/{}".format(row),header=1)
-    # print(df)
     i1 = 0
     for row in df.values.tolist():
-        print(row)
         i1 += 1
         models.db.session.add(
             models.XinXi(
@@ -29,5 +26,3 @@ for row in list1:
             )
         )
         models.db.session.commit()
-#
-#

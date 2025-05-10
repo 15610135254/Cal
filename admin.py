@@ -1,103 +1,157 @@
-from flask_admin import Admin,AdminIndexView
-from models import app
+from flask import current_app, redirect, url_for, request
+from flask_admin import Admin, AdminIndexView
 from flask_admin.contrib.sqla import ModelView
-from flask import current_app,redirect,url_for,request
-from models import db,User, Role, RolesUsers,XinXi,ShuJu
-from flask_security import current_user, utils as security_utils
+from flask_admin.contrib.sqla.fields import QuerySelectField
+from flask_security import current_user
 from wtforms import PasswordField
-from flask_admin.contrib.sqla.fields import QuerySelectMultipleField
-from wtforms.widgets import ListWidget, CheckboxInput
 
-# 自定义一个 QuerySelectMultipleField 来修复 iter_choices 的问题
-class CustomQuerySelectMultipleField(QuerySelectMultipleField):
-    widget = ListWidget(prefix_label=False) # 通常多对多关系用 checkbox
-    option_widget = CheckboxInput()
+from models import app, db, User, Role, XinXi, ShuJu
+
+def get_roles():
+    return Role.query.filter(Role.name.in_(['User', 'admin'])).all()
+
+def format_role_name(view, context, model, name):
+    return model.role.name if model.role else ''
+
+# 自定义查询选择字段，用于角色选择
+class CustomQuerySelectField(QuerySelectField):
+    def __init__(self, *args, **kwargs):
+        super(CustomQuerySelectField, self).__init__(*args, **kwargs)
 
     def iter_choices(self):
         for pk, obj in self._get_object_list():
-            selected = False
-            if self.data: # self.data 是已选中的 Role 对象列表
-                selected = obj in self.data
-            yield (pk, self.get_label(obj), selected, {}) # 确保返回4个值，最后一个是空的 render_kw
+            selected = self.data == obj
+            yield (pk, self.get_label(obj), selected, {})
 
+    def process_formdata(self, valuelist):
+        if valuelist:
+            pk = valuelist[0]
+            for val, obj in self._get_object_list():
+                if str(val) == str(pk):
+                    self.data = obj
+                    break
+            else:
+                self.data = None
+        else:
+            self.data = None
+
+# 基础管理视图，实现权限控制
 class MyModelView(ModelView):
     def is_accessible(self):
         if current_user.is_anonymous:
             return False
-        for resu in User.query.get(current_user.get_id()).roles:
-            if resu.name == 'admin':
-                return True
+        user = User.query.get(current_user.get_id())
+        if user and user.role and user.role.name == 'admin':
+            return True
         return False
 
     def inaccessible_callback(self, name, **kwargs):
-        # redirect to login page if user doesn't have access
         return redirect(url_for('index'))
 
-# 为 User 创建特定的 Admin View
-class UserAdminView(MyModelView): # 继承自 MyModelView 以保持权限控制
-    form_columns = ['username', 'email', 'password', 'active', 'roles']
+# 用户管理视图
+class UserAdminView(MyModelView):
+    form_columns = ['username', 'email', 'password', 'active', 'role']
     form_extra_fields = {
-        'password': PasswordField('Password')
+        'password': PasswordField('密码')
     }
-    # 使用 form_overrides 来指定 roles 字段使用我们自定义的字段
     form_overrides = {
-        'roles': CustomQuerySelectMultipleField
+        'role': CustomQuerySelectField
     }
 
-    # 如果需要，可以为自定义字段提供额外的参数
     form_args = {
-        'roles': {
-            'label': 'Roles', # 或者从 Role 模型自动获取
-            'query_factory': lambda: Role.query.all(), # 提供一个查询工厂来获取所有 Role 对象
-            'get_label': 'name', # 使用 Role 模型的 name 属性作为标签
-             # 'allow_blank': True, # 如果允许不选择任何角色
+        'role': {
+            'label': '角色',
+            'query_factory': get_roles,
+            'get_label': 'name',
+            'allow_blank': False,
         }
+    }
+    
+    column_labels = {
+        'username': '用户名',
+        'email': '邮箱',
+        'active': '激活状态',
+        'role': '角色'
     }
 
     def on_model_change(self, form, model, is_created):
         if is_created:
             if not form.password.data:
-                # 创建新用户时密码是必需的。
-                # 理想情况下，这应该由表单验证器（如 DataRequired）处理。
-                # 在此处添加检查是为了增加一层保障，防止创建没有密码的用户。
                 raise ValueError("创建新用户时必须提供密码。")
-            model.password = form.password.data # 直接赋值，不加密
-        else: # 更新现有用户
-            # 仅当表单中实际提供了新密码时才更新。
-            # 如果密码字段为空，则表示管理员不想更改现有密码。
+            model.password = form.password.data
+        else:
             if form.password.data:
-                model.password = form.password.data # 直接赋值，不加密
-        
-        # 'roles' 的处理:
-        # Flask-Admin 的 ModelView 会自动处理 'roles' 关系的更新，
-        # 因为 'roles' 存在于 'form_columns' 中，并且是 User 模型上的一个关系属性。
-        # 表单提交的角色数据 (form.roles.data) 会在会话提交前用于更新 model.roles。
+                model.password = form.password.data
 
-# 为 Role 创建特定的 Admin View
-class RoleAdminView(MyModelView): # 继承自 MyModelView 以保持权限控制
-    form_columns = ['name'] # 之前测试到这里仍然报错
-    form_widget_args = {
-        'name': {
-            'flags': {} # 显式提供一个空的 flags 字典
+        try:
+            if hasattr(form, 'role') and form.role.data:
+                model.role = form.role.data
+        except Exception as e:
+            print(f"处理角色时出错: {e}")
+
+# 用户角色管理视图
+class UserRoleAdminView(MyModelView):
+    column_list = ['username', 'email', 'role']
+    form_columns = ['role']
+
+    form_overrides = {
+        'role': CustomQuerySelectField
+    }
+
+    form_args = {
+        'role': {
+            'label': '角色',
+            'query_factory': get_roles,
+            'get_label': 'name',
+            'allow_blank': False,
         }
     }
 
+    can_create = False
+    can_delete = False
+
+    column_labels = {
+        'username': '用户名',
+        'email': '邮箱',
+        'role': '角色'
+    }
+    
+    column_formatters = {
+        'role': format_role_name
+    }
+
+    def on_model_change(self, form, model, is_created):
+        try:
+            if hasattr(form, 'role') and form.role.data:
+                model.role = form.role.data
+        except Exception as e:
+            print(f"处理角色时出错: {e}")
+
+# 进面数据管理视图
 class MyItem(MyModelView):
     column_searchable_list = ['地区', '部门名称', '职位', '学历', '专业']
 
+# 入围数据管理视图
 class MyShuJu(MyModelView):
     column_searchable_list = ['招录机关', '机构性质', '机构层级', '职位类别', '职位名称']
 
-admin = Admin(app=app, name='后台管理系统',template_mode='bootstrap3', base_template='admin/mybase.html',index_view=AdminIndexView(
+# 初始化后台管理系统
+admin = Admin(
+    app=app,
+    name='后台管理系统',
+    template_mode='bootstrap3',
+    base_template='admin/mybase.html',
+    index_view=AdminIndexView(
         name='导航栏',
         template='admin/welcome.html',
         url='/admin'
-    ))
+    )
+)
 
-admin.add_view(MyItem(XinXi, db.session,name='进面数据管理'))
-admin.add_view(MyShuJu(ShuJu, db.session,name='入围数据管理'))
-admin.add_view(UserAdminView(User, db.session,name='用户管理'))
-admin.add_view(RoleAdminView(Role, db.session,name='用户权限管理'))
+admin.add_view(MyItem(XinXi, db.session, name='进面数据管理'))
+admin.add_view(MyShuJu(ShuJu, db.session, name='入围数据管理'))
+admin.add_view(UserAdminView(User, db.session, name='用户管理'))
+admin.add_view(UserRoleAdminView(User, db.session, name='用户权限管理', endpoint='userrole'))
 
 if __name__ == '__main__':
     app.run(debug=True)

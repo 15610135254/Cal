@@ -1,36 +1,80 @@
-## 程序运行说明
+# 考公数据分析系统
+
+本系统用于分析和展示公务员考试数据，包括进面分数、入围分数等信息，并提供数据可视化和分数线预测功能。
+
+## 系统要求
+
+- Python 3.6+
+- MySQL 数据库
+- 相关Python依赖包
+
+## 安装步骤
 
 ### 1. 环境准备
 
-*   **Python**: 确保已安装 Python 3.9 版本。
-*   **pip**: 确保已安装 pip 包管理器。
-*   **MySQL**: 确保已安装并运行 MySQL 数据库服务。
+- **Python**: 确保已安装 Python 3.6 或更高版本
+- **pip**: 确保已安装 pip 包管理器
+- **MySQL**: 确保已安装并运行 MySQL 数据库服务
 
 ### 2. 安装依赖
 
 克隆或下载项目代码到本地。在项目根目录下打开终端，运行以下命令安装所需的 Python 库：
 
 ```bash
-pip install -r requirements.txt
+pip install flask flask-sqlalchemy flask-security flask-admin flask-babelex pymysql pandas numpy jieba scikit-learn lightgbm
 ```
 
-### 3. 数据库配置与初始化
+### 3. 数据库配置与创建
 
-*   **配置连接**: 打开 `models.py` 文件，根据您的 MySQL 安装情况修改以下数据库连接信息：
-    ```python
-    host = '127.0.0.1'  # MySQL 服务器地址
-    user = 'root'      # MySQL 用户名
-    password = ''      # MySQL 密码 (如果设置了密码，请填写)
-    database = 'xinxi' # 要使用的数据库名称
-    ```
-*   **创建数据库**: 在 MySQL 中手动创建名为 `xinxi` (或您在 `models.py` 中指定的名称) 的数据库。
-*   **初始化表和角色**: 在项目根目录下运行 `models.py` 脚本来创建数据库表结构，并初始化管理员角色和用户：
-    ```bash
-    python models.py
-    ```
-    您应该会看到类似 "数据库检查与初始化完成。" 的输出。
+#### 配置数据库连接
 
-### 4. 运行主应用程序
+打开 `models.py` 文件，根据您的 MySQL 安装情况修改以下数据库连接信息：
+
+```python
+host = '127.0.0.1'  # MySQL 服务器地址
+user = 'root'       # MySQL 用户名
+password = ''       # MySQL 密码 (本项目配置为不使用密码)
+database = 'xinxi'  # 要使用的数据库名称
+```
+
+#### 创建数据库
+
+在 MySQL 中手动创建名为 `xinxi` 的数据库：
+
+```bash
+mysql -u root
+```
+
+在 MySQL 命令行中执行：
+
+```sql
+CREATE DATABASE xinxi DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### 4. 初始化数据库表结构和管理员账户
+
+在项目根目录下运行 `models.py` 脚本来创建数据库表结构，并初始化管理员角色和用户：
+
+```bash
+python models.py
+```
+
+这将创建所需的数据库表并添加默认管理员账户（用户名：admin，密码：admin123）。执行成功后，您应该会看到类似 "数据库检查与初始化完成。" 的输出。
+
+### 5. 导入数据
+
+本系统支持多种数据导入方式，您可以选择以下任一方式导入数据：
+
+
+1. 确保`newxinxi.csv`文件位于项目根目录
+2. 运行导入脚本：
+
+```bash
+python import_csv_to_mysql.py
+python 入围daoru.py
+```
+
+### 6. 启动应用
 
 数据库准备就绪后，运行主应用程序：
 
@@ -38,17 +82,47 @@ pip install -r requirements.txt
 python main.py
 ```
 
-应用程序默认会在 `http://0.0.0.0:8080` 或 `http://127.0.0.1:8080` 上启动。您可以在浏览器中访问此地址。
+应用将在 http://localhost:8000 上运行。
 
-### 5. (可选) 运行模型训练/测试脚本
+## 系统访问
 
-如果您需要重新训练模型或使用保存的模型进行批量预测评估，可以运行：
+### 用户登录
 
-```bash
-python test_model.py
-```
+- 访问：http://localhost:8000/logins
+- 默认管理员账户：
+  - 用户名：admin
+  - 密码：admin123
 
-该脚本会连接数据库（或使用 CSV 备份），处理数据，训练或加载模型，并输出评估结果。确保运行此脚本前 `simple_model.pkl` 模型文件存在（如果只是测试加载和预测），或者有足够的数据用于训练。
+### 注册新用户
+
+- 访问：http://localhost:8000/signups
+- 注册后的用户默认为普通用户角色
+
+## 系统功能
+
+1. **数据浏览**：查看进面数据和入围数据
+2. **数据可视化**：展示各类统计图表
+3. **分数线预测**：根据历史数据预测分数线
+4. **用户管理**：管理员可以管理用户账户和权限
+5. **数据管理**：管理员可以管理进面数据和入围数据
+
+## 管理后台
+
+管理员登录后可以访问管理后台：
+
+- 访问：http://localhost:8000/admin
+- 功能：
+  - 进面数据管理
+  - 入围数据管理
+  - 用户管理
+  - 用户权限管理
+
+## 注意事项
+
+1. 数据库配置为不使用密码，如需修改，请更新`models.py`中的配置
+2. 系统仅支持两种用户角色：普通用户和管理员
+3. 每个用户只能拥有一个角色
+4. 默认管理员账户为：admin/admin123
 
 # 雷达图悬停提示实现说明 (`templates/visualization.html`)
 
@@ -209,7 +283,7 @@ chart6.on('mouseout', function(params) {
 </div>
 ```
 
-**关键点**: 
+**关键点**:
 *   后续的下拉框（部门、职位、专业）初始状态是 `disabled`，并在没有前置选项时显示提示信息。
 
 ### 2. Flask API 端点 (`main.py`)
@@ -253,14 +327,14 @@ def get_majors():
     if not region or not department or not position:
         return jsonify([])
     df = load_data_from_db()
-    filtered_df = df[(df['地区'] == region) & 
-                    (df['部门名称'] == department) & 
+    filtered_df = df[(df['地区'] == region) &
+                    (df['部门名称'] == department) &
                     (df['职位'] == position)]
     majors = filtered_df['专业'].unique().tolist()
     return jsonify(majors)
 ```
 
-**关键点**: 
+**关键点**:
 *   API 端点接收 GET 请求参数。
 *   从数据库加载数据并根据参数进行过滤。
 *   返回 JSON 格式的选项列表。
@@ -406,7 +480,7 @@ if __name__ == '__main__':
     # debug=True: 启用调试模式，代码更改后服务器会自动重启，并提供更详细的错误信息
     # host='0.0.0.0': 使服务器可以从本地网络中的任何 IP 地址访问
     # port=8081: 指定服务器监听的端口号为 8081 (区别于主应用的 8080)
-    app.run(debug=True, host='0.0.0.0', port=8081) 
+    app.run(debug=True, host='0.0.0.0', port=8081)
 ```
 
 ### 主要功能
@@ -432,7 +506,7 @@ python simple_app.py
 *   测试模板引擎 (`render_template`) 的功能。
 *   作为一个最小化的示例，用于教学或演示 Flask 的基本概念。
 
-它与项目中的主应用 (`main.py`) 是独立的，运行在不同的端口上。 
+它与项目中的主应用 (`main.py`) 是独立的，运行在不同的端口上。
 
 ## 预测模型说明 (`simple_model.pkl` & `main.py`)
 
@@ -458,42 +532,42 @@ try:
     # 加载 pickle 格式的模型文件
     model_path = 'simple_model.pkl'
     print(f"尝试加载模型: {model_path}")
-    
+
     with open(model_path, 'rb') as f:
         model_data = pickle.load(f)
-    
+
     # 从加载的数据中提取模型和元数据
     model = model_data['model']          # LightGBM 模型对象
     encoders = model_data['encoders']    # 用于分类特征编码的 LabelEncoders
     scaler = model_data['scaler']        # 用于数值特征标准化的 StandardScaler
     features = model_data['features']    # 模型训练时使用的特征列表
     metrics = model_data['metrics']      # 模型评估指标 (例如 R^2, RMSE, 置信度)
-    
+
     print(f"成功加载 {model_data.get('model_name', 'LightGBM')} 模型，特征数量: {len(features)}")
-    
+
     # ... 准备预测数据 (pred_data) ...
-    
+
     # 特征编码 (处理分类变量)
     for col, encoder in encoders.items():
         if col in pred_data.columns:
             # ... (处理已知和未知类别) ...
-            pred_data[col+'_encoded'] = encoder.transform(pred_data[col]) 
+            pred_data[col+'_encoded'] = encoder.transform(pred_data[col])
             # 或处理未知类别
 
     # 检查并填充缺失特征
     missing_features = [f for f in features if f not in pred_data.columns]
     for feature in missing_features:
         pred_data[feature] = 0 # 或其他填充策略
-        
+
     # 准备输入特征向量 (确保顺序和训练时一致)
     X_pred = pred_data[features]
-    
+
     # 标准化数值特征
     X_pred_scaled = scaler.transform(X_pred)
-    
+
     # 使用模型进行预测
     predicted_score = model.predict(X_pred_scaled)[0]
-    
+
     # 获取模型置信度 (或其他评估指标)
     confidence = metrics.get('confidence', 70) / 100 # 假设置信度存储在 metrics 中
 
@@ -529,4 +603,4 @@ except Exception as e:
 
 *   `.pkl` 文件依赖于创建它时使用的 Python 环境和库版本。如果环境变化过大，可能导致加载失败。
 *   需要确保预测时的数据预处理步骤（编码、标准化、特征工程）与模型训练时完全一致。
-*   模型需要定期重新训练以适应新的数据分布或提高准确性。 
+*   模型需要定期重新训练以适应新的数据分布或提高准确性。
