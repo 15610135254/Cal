@@ -750,7 +750,7 @@ def get_majors():
     df = load_data_from_db()
     majors = df[
         (df['地区'] == region) &
-        (df['部门名称'] == department) &
+                    (df['部门名称'] == department) &
         (df['职位'] == position)
     ]['专业'].unique().tolist()
     return jsonify(majors)

@@ -141,7 +141,7 @@ def init_db():
             )
             db.session.add(admin_user)
         elif admin_user.role_id != admin_role.id:
-            admin_user.role_id = admin_role.id
+                admin_user.role_id = admin_role.id
 
         # 更新现有用户角色
         for user in User.query.filter(User.username != admin_data['username']).all():

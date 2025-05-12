@@ -1,4 +1,4 @@
-/****** 
+/******
 版权所有
 云码资源淘宝店铺  大数据可视化大屏模板专家
 https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&search=y
@@ -84,7 +84,7 @@ div{
     color:#fff;
 }
 
-/****** 
+/******
 版权所有
 云码资源淘宝店铺  大数据可视化大屏模板专家
 https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&search=y
@@ -162,7 +162,7 @@ https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&sea
 }
 
 
-/****** 
+/******
 版权所有
 云码资源淘宝店铺  大数据可视化大屏模板专家
 https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&search=y
@@ -179,35 +179,34 @@ https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&sea
     box-sizing: border-box;
 }
 .com-count-title{
-	
-    color:#1bb4f9;
+    color:#333333;
     font-size: 18px;
     padding:0;
 }
 .count-base{
-	
+
 	margin-left:10px;
 	float:left;/*浮动*/
     width:32%;
-    height:350px; 
-    background: url('../images/left-top3.jpg') center no-repeat;
+    height:350px;
+    background: #ffffff;
 	background-size:cover;
-	
+
 }
 .count-resource{
 	margin-left:10px;
 	float:left;
 	width:32%;
-    height:350px; 
-    background: url('../images/left-top3.jpg') center no-repeat;
+    height:350px;
+    background: #ffffff;
 	background-size:cover;
 }
 .count-share{
 	margin-left:10px;
 	float:left;
 	width:48.4%;
-    height:350px; 
-    background: url('../images/left-bottom2.jpg') center no-repeat;
+    height:350px;
+    background: #ffffff;
 	background-size:cover;
 }
 
@@ -215,8 +214,8 @@ https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&sea
 	margin-left:10px;
 	float:left;
 	width:48.4%;
-    height:350px; 
-    background: url('../images/left-bottom2.jpg') center no-repeat;
+    height:350px;
+    background: #ffffff;
 	background-size:cover;
 }
 .data-label{
@@ -245,12 +244,12 @@ https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&sea
 *{ margin:0px; padding:0px; font-family:'微软雅黑'; -webkit-tap-highlight-color:rgba(0,0,0,0);  }
 li{ list-style:none }
 img{ border:none}
-a{text-decoration:none;} 
+a{text-decoration:none;}
 
 
 /* -------------------------摇奖排行榜-----------------------------------  */
 
-/****** 
+/******
 版权所有
 云码资源淘宝店铺  大数据可视化大屏模板专家
 https://shop188702750.taobao.com/search.htm?spm=a1z10.1-c.0.0.1221421cqgmNaI&search=y

@@ -28,7 +28,8 @@ def import_csv_to_mysql():
 
         # 创建MySQL连接
         try:
-            mysql_engine = create_engine('mysql+pymysql://root@127.0.0.1:3306/xinxi?charset=utf8mb4')
+            # 请将 YOUR_PASSWORD_HERE 替换为您的MySQL root用户密码
+            mysql_engine = create_engine('mysql+pymysql://root:123456@127.0.0.1:3306/xinxi?charset=utf8mb4')
             print("成功连接到MySQL数据库")
 
             # 在导入之前清空XinXi表
