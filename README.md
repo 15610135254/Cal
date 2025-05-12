@@ -604,3 +604,25 @@ except Exception as e:
 *   `.pkl` 文件依赖于创建它时使用的 Python 环境和库版本。如果环境变化过大，可能导致加载失败。
 *   需要确保预测时的数据预处理步骤（编码、标准化、特征工程）与模型训练时完全一致。
 *   模型需要定期重新训练以适应新的数据分布或提高准确性。
+
+## Windows环境特别说明
+
+Windows环境下可能遇到依赖包兼容性问题，特别是WTForms版本导致的"tuple不支持items"错误。为解决此问题，请使用项目中的`requirements-windows.txt`文件安装依赖：
+
+```bash
+pip install -r requirements-windows.txt
+```
+
+这个特殊的依赖文件固定了WTForms和Flask-WTF版本，确保与Flask-Admin兼容。
+
+## GitHub仓库
+
+本项目已托管到GitHub，您可以通过以下地址访问最新代码：
+
+```
+https://github.com/15610135254/Cal.git
+```
+
+## 更新历史
+
+请查看项目根目录的`CHANGELOG.md`文件获取详细的更新记录。
